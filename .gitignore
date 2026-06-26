@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.pth
+outputs/
+*.jsonl
+*.json
+!configs/
+.env
+*.egg-info/
+dist/
+.venv/

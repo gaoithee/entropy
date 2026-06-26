@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "entropy"
+version = "0.1.0"
+description = "Low-entropy token selection for CoT compression in reasoning LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.12",
+    "transformers>=5.12",
+    "datasets>=5.0",
+    "nnsight>=0.7",
+    "fire>=0.7",
+    "tqdm>=4.68",
+    "numpy>=2.5",
+    "pyyaml>=6.0",
+    "accelerate>=1.14",
+    "huggingface-hub>=1.21",
+    "safetensors>=0.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9.1"]
+quant = ["bitsandbytes"]
+flash = ["flash-attn"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["entropy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
