@@ -37,6 +37,9 @@ def get_thinking_tokens(model_name: str) -> dict[str, Any]:
         }
 
     if "gemma-4" in m or "gemma4" in m:
+        # Gemma4 chat template includes <|channel>thought\n<channel|> in the generation
+        # prompt itself — the model generates reasoning content directly after.
+        # The thinking region is bounded by these tokens in the template.
         return {
             "start_token": "<|channel>thought",
             "end_token": "<channel|>",

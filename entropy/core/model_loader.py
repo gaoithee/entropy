@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def load_model_and_tokenizer(
@@ -32,8 +31,10 @@ def load_model_and_tokenizer(
     (model, tokenizer, config_dict)
     config_dict always contains {"num_hidden_layers": int, "hidden_size": int}
     """
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
     kwargs: dict[str, Any] = {
-        "torch_dtype": torch.bfloat16,
+        "dtype": torch.bfloat16,
         "device_map": "auto",
         "trust_remote_code": True,
     }
@@ -64,8 +65,10 @@ def load_model_and_tokenizer(
         if model_type == "nnsight" and hasattr(model, "_model")
         else model.config.to_dict()
     )
+    # Gemma4 and other multimodal models nest text config
+    text_config = raw_config.get("text_config", raw_config)
     config = {
-        "num_hidden_layers": raw_config.get("num_hidden_layers", raw_config.get("n_layer", 0)),
-        "hidden_size":       raw_config.get("hidden_size",       raw_config.get("n_embd", 0)),
+        "num_hidden_layers": text_config.get("num_hidden_layers", text_config.get("n_layer", 0)),
+        "hidden_size":       text_config.get("hidden_size",       text_config.get("n_embd", 0)),
     }
     return model, tokenizer, config
