@@ -88,7 +88,8 @@ def get_data(data_name: str) -> list[tuple[str, int | str]]:
     if "math-500" in data_name.casefold():
         dataset = load_dataset("HuggingFaceH4/MATH-500", split="test")
         instr = "\nAnswer by placing your final answer in a \\boxed{} environment."
-        return [(item["problem"] + instr, str(item["answer"])) for item in dataset]
+        out = [(item["problem"] + instr, str(item["answer"])) for item in dataset]
+        return out[:100]
 
     raise ValueError(f"Unknown dataset: {data_name}")
 

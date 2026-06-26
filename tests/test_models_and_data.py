@@ -20,19 +20,22 @@ import torch
 
 MODELS = [
     "openai/gpt-oss-20b",
-    "google/gemma-4-26B-A4B-it",
+    # "openai/gpt-oss-120b", lovelace's a100 only
     "Qwen/Qwen3-14B",
+    "Qwen/Qwen3-4B",
+    "google/gemma-4-26B-A4B-it",
+    "google/gemma-4-E4B-it",
     "microsoft/Phi-4-reasoning-plus",
 ]
 
 DATASET_NAMES = [
     "aime2025",
     "aime_2024",
+    "aime_2026",
     "zebralogic",
     "math-500",
     "non-math-mmlu-pro",
     "gpqa",
-    "gsm8k",
 ]
 
 
@@ -100,6 +103,23 @@ class TestDatasetLoading:
             _, answer = get_data(name)[0]
             assert isinstance(answer, str) and len(answer) == 1 and answer.isalpha(), \
                 f"{name}: expected single letter answer, got {answer!r}"
+
+    def test_dataset_sizes(self):
+        """Verify expected sizes for each dataset."""
+        from entropy.core.data_utils import get_data
+        expected = {
+            "aime2025":          30,
+            "aime_2024":         30,
+            "aime_2026":         30,
+            "zebralogic":        50,
+            "math-500":         100,
+            "non-math-mmlu-pro": 65,
+            "gpqa":             197,
+        }
+        for name, expected_len in expected.items():
+            data = get_data(name)
+            assert len(data) == expected_len, \
+                f"{name}: expected {expected_len} items, got {len(data)}"
 
     def test_unknown_dataset_raises(self):
         from entropy.core.data_utils import get_data
@@ -397,3 +417,82 @@ class TestTraceCollectionSynthetic:
         assert s == len(prompt) + len(start)
         assert e == len(prompt) + len(start) + len(cot)
         assert tokens[s:e] == cot
+
+
+# ===========================================================================
+# 6. MODEL × DATASET CROSS TEST
+#    For every (model, dataset) pair: apply chat template and show output
+# ===========================================================================
+
+class TestModelDatasetCross:
+    """Test chat template + first generation tokens for every model × dataset pair.
+    
+    Parametrized on models via session fixture. Iterates over all datasets
+    within each test so we don't create N*M fixtures (which would reload
+    the model N*M times).
+    """
+
+    def test_chat_template_all_datasets(self, model_and_tokenizer):
+        """Apply chat template for every dataset and verify basic format."""
+        from entropy.core.data_utils import get_data
+        from entropy.models.registry import get_thinking_tokens
+        model_name, _, tokenizer, _ = model_and_tokenizer
+        cfg = get_thinking_tokens(model_name)
+        template_kwargs = {}
+        if cfg.get("enable_thinking"):
+            template_kwargs["enable_thinking"] = True
+
+        for data_name in DATASET_NAMES:
+            question, answer = get_data(data_name)[0]
+            messages = [{"role": "user", "content": question}]
+            prompt = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True, **template_kwargs
+            )
+            prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
+
+            print(f"\n[{model_name}] [{data_name}]")
+            print(f"  Q: {question[:80]!r}")
+            print(f"  A: {str(answer)!r}")
+            print(f"  PROMPT TAIL: ...{prompt[-150:]!r}")
+            print(f"  N tokens: {len(prompt_tokens)}")
+
+            assert len(prompt_tokens) > 0, f"{model_name} × {data_name}: empty prompt"
+            assert question[:30] in prompt, f"{model_name} × {data_name}: question not in prompt"
+
+    def test_generation_all_datasets(self, model_and_tokenizer):
+        """Generate 10 tokens for one question per dataset and print output."""
+        from entropy.core.data_utils import get_data
+        from entropy.models.registry import get_thinking_tokens
+
+        model_name, model, tokenizer, _ = model_and_tokenizer
+        cfg = get_thinking_tokens(model_name)
+        template_kwargs = {}
+        if cfg.get("enable_thinking"):
+            template_kwargs["enable_thinking"] = True
+
+        for data_name in DATASET_NAMES:
+            question, answer = get_data(data_name)[0]
+            messages = [{"role": "user", "content": question}]
+            prompt = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True, **template_kwargs
+            )
+            input_ids = tokenizer.encode(prompt, return_tensors="pt").to(model.device)
+
+            with torch.no_grad():
+                out = model.generate(input_ids, max_new_tokens=10, do_sample=False)
+
+            generated_ids = out[0][input_ids.shape[1]:]
+            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=False)
+
+            print(f"\n[{model_name}] [{data_name}]")
+            print(f"  GENERATED: {generated_text!r}")
+
+            # Verify thinking starts either in prompt or in generation
+            full = prompt + generated_text
+            thinking_present = (
+                cfg["start_token"] in full
+                if cfg["start_token_ids"] is None
+                else generated_ids[:len(cfg["start_token_ids"])].tolist() == cfg["start_token_ids"]
+            )
+            assert thinking_present, \
+                f"{model_name} × {data_name}: thinking start not found in prompt+generation"
