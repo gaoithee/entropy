@@ -105,3 +105,43 @@ def get_answer_domain(data_name: str) -> str:
     if any(k in name for k in ("mmlu", "zebralogic", "gpqa")):
         return "mcq"
     return "math"
+
+def extract_boxed_answer(text: str, first: bool = False) -> str:
+    """Extract content from a balanced \\boxed{} occurrence in the string."""
+    if first:
+        search_from = 0
+        while True:
+            start = text.find('\\boxed{', search_from)
+            if start == -1:
+                return ''
+
+            answer = _extract_boxed_answer_at(text, start)
+            if answer.strip():
+                return answer
+            search_from = start + 7
+
+    start = text.rfind('\\boxed{')
+    if start == -1:
+        return ''
+
+    return _extract_boxed_answer_at(text, start)
+
+
+def _extract_boxed_answer_at(text: str, start: int) -> str:
+    """Extract balanced boxed content starting at a known ``\\boxed{`` index."""
+
+    start_content = start + 7
+    brace_count = 1
+    i = start_content
+
+    while i < len(text) and brace_count > 0:
+        if text[i] == '{':
+            brace_count += 1
+        elif text[i] == '}':
+            brace_count -= 1
+        i += 1
+
+    if brace_count == 0:
+        return text[start_content:i-1]
+
+    return ''

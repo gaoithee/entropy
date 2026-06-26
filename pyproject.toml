@@ -9,17 +9,20 @@ description = "Low-entropy token selection for CoT compression in reasoning LLMs
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "torch>=2.12",
-    "transformers>=5.12",
+    "torch>=2.9",
+    "transformers==5.9.0",
     "datasets>=5.0",
     "nnsight>=0.7",
     "fire>=0.7",
     "tqdm>=4.68",
-    "numpy>=2.5",
+    "numpy>=2.0",
     "pyyaml>=6.0",
     "accelerate>=1.14",
     "huggingface-hub>=1.21",
     "safetensors>=0.8",
+    "kernels==0.12.2",
+    "torchao==0.16.0",
+    "triton==3.5.0",
 ]
 
 [project.optional-dependencies]

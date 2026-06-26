@@ -20,7 +20,7 @@ import torch
 
 MODELS = [
     "openai/gpt-oss-20b",
-    # "openai/gpt-oss-120b", lovelace's a100 only
+    # "openai/gpt-oss-120b",
     "Qwen/Qwen3-14B",
     "Qwen/Qwen3-4B",
     "google/gemma-4-26B-A4B-it",
@@ -496,3 +496,170 @@ class TestModelDatasetCross:
             )
             assert thinking_present, \
                 f"{model_name} × {data_name}: thinking start not found in prompt+generation"
+
+
+# ===========================================================================
+# 7. ACTIVATION AND ENTROPY COLLECTION
+#    Step 1: collect_traces.py (vLLM) generates traces for one question
+#    Step 2: TraceActivationEntropy._collect_from_trace (HF) extracts acts + entropies
+# ===========================================================================
+
+class TestActivationEntropyCollection:
+    """Test the full activation + entropy collection pipeline.
+
+    Step 1: Run scripts/collect_traces.py with num_out=1, max 1 question.
+            This uses vLLM and saves a JSON with traces_tokens + traces_entropy.
+    Step 2: Feed those tokens to TraceActivationEntropy._collect_from_trace
+            (HF forward pass) and verify activations and entropies_hf.
+    """
+
+    def _run_collect_traces(self, model_name, data_name, output_dir):
+        """Run scripts/collect_traces.py for 1 question, 1 trace."""
+        import subprocess, sys, json
+        result = subprocess.run(
+            [sys.executable, "scripts/collect_traces.py",
+             "--model_name", model_name,
+             "--data_name", data_name,
+             "--num_out", "1",
+             "--batch_size", "1",
+             "--resume", "False",
+             "--max_tokens", "128",
+             "--gpu_memory_utilization", "0.35",
+            ],
+            capture_output=True, text=True, cwd=str(Path(__file__).parent.parent),
+            env={**__import__("os").environ, "CUDA_VISIBLE_DEVICES": "0"},
+        )
+        print(result.stdout[-2000:] if result.stdout else "")
+        print(result.stderr[-2000:] if result.stderr else "")
+        assert result.returncode == 0, f"collect_traces.py failed:\n{result.stderr[-1000:]}"
+
+        # Find the output JSON
+        import glob
+        dataset_short = data_name.split("/")[-1]
+        model_short = model_name.split("/")[-1]
+        json_path = Path(__file__).parent.parent / "data" / dataset_short / f"{model_short}_teacher_traces.json"
+        assert json_path.exists(), f"Output not found: {json_path}"
+        with open(json_path) as f:
+            traces = json.load(f)
+        assert len(traces) >= 1
+        return traces[0]
+
+    def _make_collector(self, model, tokenizer, config, tmp_dir, model_name):
+        """Instantiate TraceActivationEntropy bypassing model loading."""
+        from entropy.experiments.trace_collection import TraceActivationEntropy, TraceCollectionCfg
+        n_layers = config["num_hidden_layers"]
+        cfg = TraceCollectionCfg(
+            model_name=model_name,
+            data_name="opencompass/AIME2025",
+            output_dir=tmp_dir,
+            top_k_for_entropy=20,
+        )
+        collector = object.__new__(TraceActivationEntropy)
+        collector.cfg = cfg
+        collector.model = model
+        collector.tokenizer = tokenizer
+        collector.num_layers = n_layers
+        collector.layers_to_collect = list(range(n_layers))
+        collector.output_path = Path(tmp_dir)
+        collector._partial = False
+        collector._suffix = ""
+        return collector, n_layers
+
+    def test_collect_from_trace(self, model_and_tokenizer):
+        """Full pipeline: collect_traces.py → _collect_from_trace → check acts + entropies."""
+        import tempfile
+        model_name, model, tokenizer, config = model_and_tokenizer
+
+        # Move HF model to CPU so vLLM subprocess has full GPU budget
+        model.cpu()
+        torch.cuda.empty_cache()
+
+        # Step 1: generate trace with vLLM via collect_traces.py
+        trace_record = self._run_collect_traces(model_name, "aime2025", "data")
+        assert len(trace_record["traces_tokens"]) >= 1
+
+        prompt_tokens = trace_record["prompt_tokens"]
+        trace_tokens  = trace_record["traces_tokens"][0]
+        vllm_entropy  = trace_record["traces_entropy"][0]
+        trace_text    = trace_record["traces"][0]
+
+        print(f"\n[{model_name}] prompt_len={len(prompt_tokens)} trace_len={len(trace_tokens)}")
+        print(f"  trace[:80]: {trace_text[:80]!r}")
+
+        # Step 2: HF forward pass — move model back to GPU
+        model.cuda()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            collector, n_layers = self._make_collector(
+                model, tokenizer, config, tmp_dir, model_name
+            )
+            result = collector._collect_from_trace(
+                trace_text, prompt_tokens, trace_tokens, vllm_entropy
+            )
+
+        acts     = result["activations"]
+        ents_hf  = result["entropies_hf"]
+        ents_vllm = result["entropies_vllm"]
+
+        print(f"  activations shape: {list(acts.shape)}")
+        print(f"  entropies_hf[:5]:   {[f'{e:.4f}' for e in ents_hf[:5]]}")
+        print(f"  entropies_vllm[:5]: {[f'{e:.4f}' for e in ents_vllm[:5]]}")
+
+        assert acts.ndim == 3
+        assert acts.shape[0] == len(trace_tokens)
+        assert acts.shape[1] == n_layers
+        assert len(ents_hf)   == len(trace_tokens)
+        assert len(ents_vllm) == len(trace_tokens)
+
+        max_ent = __import__("torch").log(__import__("torch").tensor(20.0)).item()
+        for i, e in enumerate(ents_hf):
+            assert 0.0 <= e <= max_ent + 0.01, f"entropies_hf[{i}]={e:.4f} out of range"
+
+        assert __import__("torch").isfinite(acts).all()
+        assert acts.abs().sum() > 0
+        assert result["entropies_vllm"] == vllm_entropy
+        print(f"  ✓ all checks passed")
+
+    def test_pth_roundtrip(self, model_and_tokenizer):
+        """Verify .pth save/load preserves all fields correctly."""
+        import tempfile
+        model_name, model, tokenizer, config = model_and_tokenizer
+
+        # Move HF model to CPU so vLLM subprocess has full GPU budget
+        model.cpu()
+        torch.cuda.empty_cache()
+
+        trace_record = self._run_collect_traces(model_name, "aime2025", "data")
+        prompt_tokens = trace_record["prompt_tokens"]
+        trace_tokens  = trace_record["traces_tokens"][0]
+        vllm_entropy  = trace_record["traces_entropy"][0]
+        trace_text    = trace_record["traces"][0]
+        gt_answer     = str(trace_record["GT_answer"])
+
+        # Move model back to GPU for HF forward pass
+        model.cuda()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            collector, n_layers = self._make_collector(
+                model, tokenizer, config, tmp_dir, model_name
+            )
+            trace_result = collector._collect_from_trace(
+                trace_text, prompt_tokens, trace_tokens, vllm_entropy
+            )
+            question_result = {
+                "input_text":    trace_record["input_text"],
+                "prompt_tokens": prompt_tokens,
+                "GT_answer":     gt_answer,
+                "traces":        [trace_result],
+                "num_layers":    n_layers,
+                "model_num_layers": n_layers,
+                "layers_collected": list(range(n_layers)),
+            }
+            pth_path = Path(tmp_dir) / "question_0000.pth"
+            __import__("torch").save(question_result, pth_path)
+            loaded = __import__("torch").load(pth_path, weights_only=False)
+
+        assert loaded["GT_answer"] == gt_answer
+        t = loaded["traces"][0]
+        assert t["activations"].shape == (len(trace_tokens), n_layers, config["hidden_size"])
+        assert len(t["entropies_hf"])   == len(trace_tokens)
+        assert len(t["entropies_vllm"]) == len(trace_tokens)
+        print(f"\n[{model_name}] .pth roundtrip ✓ shape={list(t['activations'].shape)}")
