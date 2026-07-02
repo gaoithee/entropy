@@ -1,0 +1,8 @@
+Job 8: model=openai/gpt-oss-120b dataset=aime_2024
+Running: python scripts/collect_traces.py --model_name openai/gpt-oss-120b --data_name aime_2024 --num_out 16 --batch_size 16 --resume True --max_tokens 16384 --gpu_memory_utilization 0.9 --max_model_len 22000
+Loading dataset: aime_2024
+Loaded 30 examples
+Loading model: openai/gpt-oss-120b
+INFO 06-27 14:21:27 [api_utils.py:273] non-default args: {'trust_remote_code': True, 'max_model_len': 22000, 'gpu_memory_utilization': 0.9, 'disable_log_stats': True, 'model': 'openai/gpt-oss-120b'}
+INFO 06-27 14:21:28 [model.py:611] Resolved architecture: GptOssForCausalLM
+slurmstepd: error: *** JOB 68336 ON babbage CANCELLED AT 2026-06-27T14:21:28 ***

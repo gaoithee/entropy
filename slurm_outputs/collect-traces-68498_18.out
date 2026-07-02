@@ -1,0 +1,166 @@
+Job 18: model=Qwen/Qwen3-14B dataset=non-math-mmlu-pro
+Running: python scripts/collect_traces.py --model_name Qwen/Qwen3-14B --data_name non-math-mmlu-pro --num_out 16 --batch_size 64 --resume True --max_tokens 16384 --gpu_memory_utilization 0.9 --max_model_len 22000
+Loading dataset: non-math-mmlu-pro
+Loaded 65 examples
+Loading model: Qwen/Qwen3-14B
+INFO 07-01 04:14:00 [api_utils.py:273] non-default args: {'trust_remote_code': True, 'max_model_len': 22000, 'gpu_memory_utilization': 0.9, 'disable_log_stats': True, 'model': 'Qwen/Qwen3-14B'}
+INFO 07-01 04:14:01 [model.py:611] Resolved architecture: Qwen3ForCausalLM
+INFO 07-01 04:14:01 [model.py:1745] Using max model len 22000
+INFO 07-01 04:14:01 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 07-01 04:14:01 [vllm.py:999] Asynchronous scheduling is enabled.
+INFO 07-01 04:14:01 [kernel.py:270] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'])
+(EngineCore pid=110097) INFO 07-01 04:14:05 [core.py:113] Initializing a V1 LLM engine (v0.23.0) with config: model='Qwen/Qwen3-14B', speculative_config=None, tokenizer='Qwen/Qwen3-14B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.bfloat16, max_seq_len=22000, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen/Qwen3-14B, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'ir_enable_torch_wrap': True, 'splitting_ops': ['vllm::unified_attention_with_output', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::qwen_gdn_attention_core', 'vllm::gdn_attention_core_xpu', 'vllm::olmo_hybrid_gdn_full_forward', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::deepseek_v4_attention', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224, 232, 240, 248, 256, 272, 288, 304, 320, 336, 352, 368, 384, 400, 416, 432, 448, 464, 480, 496, 512], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False, 'fuse_rope_kvcache_cat_mla': False, 'fuse_act_padding': False}, 'max_cudagraph_capture_size': 512, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native']), enable_flashinfer_autotune=True, moe_backend='auto', linear_backend='auto')
+(EngineCore pid=110097) INFO 07-01 04:14:07 [parallel_state.py:1568] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.30.37.197:50001 backend=nccl
+(EngineCore pid=110097) INFO 07-01 04:14:07 [parallel_state.py:1903] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore pid=110097) INFO 07-01 04:14:07 [gpu_worker.py:303] Using V2 Model Runner
+(EngineCore pid=110097) INFO 07-01 04:14:08 [topk_topp_sampler.py:55] Using FlashInfer for top-p & top-k sampling.
+(EngineCore pid=110097) INFO 07-01 04:14:08 [model_runner.py:298] Loading model from scratch...
+(EngineCore pid=110097) INFO 07-01 04:14:09 [cuda.py:378] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore pid=110097) INFO 07-01 04:14:09 [flash_attn.py:636] Using FlashAttention version 2
+(EngineCore pid=110097) <frozen importlib._bootstrap_external>:1184: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+(EngineCore pid=110097) <frozen importlib._bootstrap_external>:1184: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+(EngineCore pid=110097) INFO 07-01 04:14:10 [weight_utils.py:922] Filesystem type for checkpoints: NFS4. Checkpoint size: 27.51 GiB. Available RAM: 475.19 GiB.
+(EngineCore pid=110097) INFO 07-01 04:14:10 [weight_utils.py:884] Prefetching checkpoint files into page cache started (in background, num_threads=8, block_size=16777216 bytes)
+(EngineCore pid=110097) Loading safetensors checkpoint shards:   0% Completed | 0/8 [00:00<?, ?it/s]
+(EngineCore pid=110097) Loading safetensors checkpoint shards:  12% Completed | 1/8 [00:00<00:05,  1.24it/s]
+(EngineCore pid=110097) INFO 07-01 04:14:11 [weight_utils.py:856] Prefetching checkpoint files: 10% (1/8)
+(EngineCore pid=110097) INFO 07-01 04:14:26 [weight_utils.py:856] Prefetching checkpoint files: 20% (2/8)
+(EngineCore pid=110097) INFO 07-01 04:14:37 [weight_utils.py:856] Prefetching checkpoint files: 30% (3/8)
+(EngineCore pid=110097) INFO 07-01 04:14:38 [weight_utils.py:856] Prefetching checkpoint files: 40% (4/8)
+(EngineCore pid=110097) INFO 07-01 04:14:38 [weight_utils.py:856] Prefetching checkpoint files: 50% (5/8)
+(EngineCore pid=110097) INFO 07-01 04:14:38 [weight_utils.py:856] Prefetching checkpoint files: 60% (6/8)
+(EngineCore pid=110097) INFO 07-01 04:14:39 [weight_utils.py:856] Prefetching checkpoint files: 70% (7/8)
+(EngineCore pid=110097) Loading safetensors checkpoint shards:  25% Completed | 2/8 [00:28<01:41, 16.89s/it]
+(EngineCore pid=110097) INFO 07-01 04:14:39 [weight_utils.py:856] Prefetching checkpoint files: 80% (8/8)
+(EngineCore pid=110097) INFO 07-01 04:14:39 [weight_utils.py:879] Prefetching checkpoint files into page cache finished in 29.19s
+(EngineCore pid=110097) Loading safetensors checkpoint shards:  38% Completed | 3/8 [00:29<00:47,  9.60s/it]
+(EngineCore pid=110097) Loading safetensors checkpoint shards:  50% Completed | 4/8 [00:30<00:24,  6.17s/it]
+(EngineCore pid=110097) Loading safetensors checkpoint shards:  62% Completed | 5/8 [00:31<00:12,  4.27s/it]
+(EngineCore pid=110097) Loading safetensors checkpoint shards:  75% Completed | 6/8 [00:32<00:06,  3.13s/it]
+(EngineCore pid=110097) Loading safetensors checkpoint shards:  88% Completed | 7/8 [00:33<00:02,  2.41s/it]
+(EngineCore pid=110097) Loading safetensors checkpoint shards: 100% Completed | 8/8 [00:34<00:00,  1.83s/it]
+(EngineCore pid=110097) Loading safetensors checkpoint shards: 100% Completed | 8/8 [00:34<00:00,  4.27s/it]
+(EngineCore pid=110097) 
+(EngineCore pid=110097) INFO 07-01 04:14:44 [default_loader.py:397] Loading weights took 34.22 seconds
+(EngineCore pid=110097) INFO 07-01 04:14:45 [model_runner.py:319] Model loading took 27.52 GiB and 36.785412 seconds
+(EngineCore pid=110097) INFO 07-01 04:14:50 [backends.py:1089] Using cache directory: /u/scandussio/.cache/vllm/torch_compile_cache/94467c10f9/rank_0_0/backbone for vLLM's torch.compile
+(EngineCore pid=110097) INFO 07-01 04:14:50 [backends.py:1148] Dynamo bytecode transform time: 4.81 s
+(EngineCore pid=110097) INFO 07-01 04:14:53 [backends.py:378] Cache the graph of compile range (1, 8192) for later use
+(EngineCore pid=110097) INFO 07-01 04:14:57 [backends.py:393] Compiling a graph for compile range (1, 8192) takes 6.74 s
+(EngineCore pid=110097) INFO 07-01 04:14:58 [decorators.py:311] Directly load AOT compilation from path /u/scandussio/.cache/vllm/torch_compile_cache/torch_aot_compile/e2459d915c4ac0e1d66d060b39e7257313c976e914086d7e38addab2a4d7087d/rank_0_0/model
+(EngineCore pid=110097) INFO 07-01 04:14:58 [monitor.py:53] torch.compile took 12.50 s in total
+(EngineCore pid=110097) INFO 07-01 04:14:59 [monitor.py:81] Initial profiling/warmup run took 1.50 s
+(EngineCore pid=110097) INFO 07-01 04:15:00 [gpu_worker.py:480] Available KV cache memory: 41.99 GiB
+(EngineCore pid=110097) INFO 07-01 04:15:00 [kv_cache_utils.py:1744] GPU KV cache size: 275,168 tokens
+(EngineCore pid=110097) INFO 07-01 04:15:00 [kv_cache_utils.py:1745] Maximum concurrency for 22,000 tokens per request: 12.51x
+(EngineCore pid=110097) Capturing CUDA graphs (PIECEWISE):   0%|          | 0/51 [00:00<?, ?it/s]Capturing CUDA graphs (PIECEWISE):   2%|▏         | 1/51 [00:00<00:06,  7.31it/s]Capturing CUDA graphs (PIECEWISE):   6%|▌         | 3/51 [00:00<00:04,  9.76it/s]Capturing CUDA graphs (PIECEWISE):  10%|▉         | 5/51 [00:00<00:04, 10.44it/s]Capturing CUDA graphs (PIECEWISE):  14%|█▎        | 7/51 [00:00<00:04, 10.71it/s]Capturing CUDA graphs (PIECEWISE):  18%|█▊        | 9/51 [00:00<00:03, 11.26it/s]Capturing CUDA graphs (PIECEWISE):  22%|██▏       | 11/51 [00:00<00:03, 12.00it/s]Capturing CUDA graphs (PIECEWISE):  25%|██▌       | 13/51 [00:01<00:03, 12.49it/s]Capturing CUDA graphs (PIECEWISE):  29%|██▉       | 15/51 [00:01<00:02, 12.90it/s]Capturing CUDA graphs (PIECEWISE):  33%|███▎      | 17/51 [00:01<00:02, 13.53it/s]Capturing CUDA graphs (PIECEWISE):  37%|███▋      | 19/51 [00:01<00:02, 14.31it/s]Capturing CUDA graphs (PIECEWISE):  41%|████      | 21/51 [00:01<00:02, 14.94it/s]Capturing CUDA graphs (PIECEWISE):  45%|████▌     | 23/51 [00:01<00:01, 15.47it/s]Capturing CUDA graphs (PIECEWISE):  49%|████▉     | 25/51 [00:01<00:01, 15.92it/s]Capturing CUDA graphs (PIECEWISE):  53%|█████▎    | 27/51 [00:02<00:01, 16.22it/s]Capturing CUDA graphs (PIECEWISE):  57%|█████▋    | 29/51 [00:02<00:01, 16.51it/s]Capturing CUDA graphs (PIECEWISE):  61%|██████    | 31/51 [00:02<00:01, 16.73it/s]Capturing CUDA graphs (PIECEWISE):  65%|██████▍   | 33/51 [00:02<00:01, 16.93it/s]Capturing CUDA graphs (PIECEWISE):  69%|██████▊   | 35/51 [00:02<00:00, 17.50it/s]Capturing CUDA graphs (PIECEWISE):  73%|███████▎  | 37/51 [00:02<00:00, 15.44it/s]Capturing CUDA graphs (PIECEWISE):  76%|███████▋  | 39/51 [00:02<00:00, 16.26it/s]Capturing CUDA graphs (PIECEWISE):  80%|████████  | 41/51 [00:02<00:00, 17.10it/s]Capturing CUDA graphs (PIECEWISE):  84%|████████▍ | 43/51 [00:02<00:00, 17.87it/s]Capturing CUDA graphs (PIECEWISE):  90%|█████████ | 46/51 [00:03<00:00, 18.87it/s]Capturing CUDA graphs (PIECEWISE):  94%|█████████▍| 48/51 [00:03<00:00, 18.66it/s]Capturing CUDA graphs (PIECEWISE): 100%|██████████| 51/51 [00:03<00:00, 19.49it/s]Capturing CUDA graphs (PIECEWISE): 100%|██████████| 51/51 [00:03<00:00, 15.31it/s]
+(EngineCore pid=110097) Capturing CUDA graphs (FULL):   0%|          | 0/35 [00:00<?, ?it/s]Capturing CUDA graphs (FULL):   3%|▎         | 1/35 [00:00<00:03,  8.54it/s]Capturing CUDA graphs (FULL):   9%|▊         | 3/35 [00:00<00:02, 13.54it/s]Capturing CUDA graphs (FULL):  14%|█▍        | 5/35 [00:00<00:01, 15.10it/s]Capturing CUDA graphs (FULL):  20%|██        | 7/35 [00:00<00:01, 15.98it/s]Capturing CUDA graphs (FULL):  26%|██▌       | 9/35 [00:00<00:01, 16.61it/s]Capturing CUDA graphs (FULL):  31%|███▏      | 11/35 [00:00<00:01, 17.07it/s]Capturing CUDA graphs (FULL):  37%|███▋      | 13/35 [00:00<00:01, 17.45it/s]Capturing CUDA graphs (FULL):  43%|████▎     | 15/35 [00:00<00:01, 17.63it/s]Capturing CUDA graphs (FULL):  49%|████▊     | 17/35 [00:01<00:00, 18.17it/s]Capturing CUDA graphs (FULL):  57%|█████▋    | 20/35 [00:01<00:00, 19.06it/s]Capturing CUDA graphs (FULL):  66%|██████▌   | 23/35 [00:01<00:00, 19.49it/s]Capturing CUDA graphs (FULL):  74%|███████▍  | 26/35 [00:01<00:00, 20.10it/s]Capturing CUDA graphs (FULL):  83%|████████▎ | 29/35 [00:01<00:00, 20.77it/s]Capturing CUDA graphs (FULL):  91%|█████████▏| 32/35 [00:01<00:00, 21.79it/s]Capturing CUDA graphs (FULL): 100%|██████████| 35/35 [00:01<00:00, 22.65it/s]Capturing CUDA graphs (FULL): 100%|██████████| 35/35 [00:01<00:00, 19.15it/s]
+(EngineCore pid=110097) INFO 07-01 04:15:06 [model_runner.py:701] Graph capturing finished in 6 secs, took 0.75 GiB
+(EngineCore pid=110097) INFO 07-01 04:15:07 [jit_monitor.py:54] Kernel JIT monitor activated — Triton JIT compilations during inference will be logged as warnings.
+(EngineCore pid=110097) INFO 07-01 04:15:07 [core.py:306] init engine (profile, create kv cache, warmup model) took 22.32 s (compilation: 12.50 s)
+(EngineCore pid=110097) INFO 07-01 04:15:07 [kernel.py:270] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'])
+Could not read existing file: Expecting value: line 345954 column 5 (char 8060470). Starting fresh.
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]
+Rendering prompts:   0%|          | 0/64 [00:00<?, ?it/s][A
+Rendering prompts:  86%|████████▌ | 55/64 [00:00<00:00, 543.82it/s][ARendering prompts: 100%|██████████| 64/64 [00:00<00:00, 573.32it/s]
+
+Processed prompts:   0%|          | 0/1024 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s][A(EngineCore pid=110097) WARNING 07-01 04:15:09 [jit_monitor.py:103] Triton kernel JIT compilation during inference: _topk_log_softmax_kernel. This causes a latency spike; consider extending warmup to cover this shape/config.
+
+Processed prompts:   2%|▏         | 16/1024 [00:28<29:53,  1.78s/it, est. speed input: 49.45 toks/s, output: 203.20 toks/s][A
+Processed prompts:   3%|▎         | 32/1024 [00:33<15:26,  1.07it/s, est. speed input: 86.28 toks/s, output: 365.78 toks/s][A
+Processed prompts:   5%|▍         | 48/1024 [00:49<15:35,  1.04it/s, est. speed input: 82.68 toks/s, output: 400.27 toks/s][A
+Processed prompts:   6%|▋         | 64/1024 [00:58<12:46,  1.25it/s, est. speed input: 105.96 toks/s, output: 536.22 toks/s][A
+Processed prompts:   8%|▊         | 80/1024 [00:59<08:20,  1.89it/s, est. speed input: 138.08 toks/s, output: 707.51 toks/s][A
+Processed prompts:   9%|▉         | 96/1024 [01:29<15:25,  1.00it/s, est. speed input: 137.52 toks/s, output: 622.70 toks/s][A
+Processed prompts:  11%|█         | 112/1024 [01:30<10:22,  1.47it/s, est. speed input: 152.10 toks/s, output: 762.98 toks/s][A
+Processed prompts:  12%|█▎        | 128/1024 [01:32<07:30,  1.99it/s, est. speed input: 163.54 toks/s, output: 853.45 toks/s][A
+Processed prompts:  14%|█▍        | 144/1024 [01:35<06:02,  2.43it/s, est. speed input: 175.91 toks/s, output: 965.07 toks/s][A
+Processed prompts:  14%|█▍        | 144/1024 [01:51<06:02,  2.43it/s, est. speed input: 175.91 toks/s, output: 965.07 toks/s][A
+Processed prompts:  16%|█▌        | 160/1024 [01:56<09:50,  1.46it/s, est. speed input: 158.21 toks/s, output: 938.03 toks/s][A
+Processed prompts:  17%|█▋        | 176/1024 [02:31<16:13,  1.15s/it, est. speed input: 132.84 toks/s, output: 775.63 toks/s][A
+Processed prompts:  19%|█▉        | 192/1024 [02:38<12:59,  1.07it/s, est. speed input: 149.11 toks/s, output: 878.43 toks/s][A
+Processed prompts:  20%|██        | 208/1024 [02:41<09:29,  1.43it/s, est. speed input: 161.61 toks/s, output: 1010.33 toks/s][A
+Processed prompts:  22%|██▏       | 224/1024 [02:53<09:40,  1.38it/s, est. speed input: 158.06 toks/s, output: 1039.18 toks/s][A
+Processed prompts:  23%|██▎       | 240/1024 [02:58<07:52,  1.66it/s, est. speed input: 170.39 toks/s, output: 1127.31 toks/s][A
+Processed prompts:  25%|██▌       | 256/1024 [03:00<05:39,  2.26it/s, est. speed input: 183.02 toks/s, output: 1179.96 toks/s][A
+Processed prompts:  27%|██▋       | 272/1024 [03:03<04:38,  2.70it/s, est. speed input: 194.49 toks/s, output: 1295.81 toks/s][A
+Processed prompts:  28%|██▊       | 288/1024 [03:08<04:28,  2.75it/s, est. speed input: 202.55 toks/s, output: 1372.59 toks/s][A
+Processed prompts:  30%|██▉       | 304/1024 [03:19<05:25,  2.21it/s, est. speed input: 202.30 toks/s, output: 1345.54 toks/s][A
+Processed prompts:  31%|███▏      | 320/1024 [03:47<09:57,  1.18it/s, est. speed input: 187.81 toks/s, output: 1256.50 toks/s][A
+Processed prompts:  33%|███▎      | 336/1024 [03:58<09:04,  1.26it/s, est. speed input: 186.97 toks/s, output: 1300.77 toks/s][A
+Processed prompts:  34%|███▍      | 352/1024 [04:04<07:25,  1.51it/s, est. speed input: 199.16 toks/s, output: 1400.91 toks/s][A
+Processed prompts:  36%|███▌      | 368/1024 [04:09<06:09,  1.78it/s, est. speed input: 201.55 toks/s, output: 1443.87 toks/s][A
+Processed prompts:  38%|███▊      | 384/1024 [05:09<16:17,  1.53s/it, est. speed input: 167.72 toks/s, output: 1268.92 toks/s][A
+Processed prompts:  39%|███▉      | 400/1024 [05:39<16:48,  1.62s/it, est. speed input: 159.90 toks/s, output: 1220.07 toks/s][A
+Processed prompts:  41%|████      | 416/1024 [06:18<18:57,  1.87s/it, est. speed input: 148.12 toks/s, output: 1236.45 toks/s][A
+Processed prompts:  42%|████▏     | 432/1024 [06:24<13:59,  1.42s/it, est. speed input: 149.77 toks/s, output: 1347.85 toks/s][A
+Processed prompts:  44%|████▍     | 448/1024 [09:20<41:10,  4.29s/it, est. speed input: 107.65 toks/s, output: 1072.61 toks/s][A
+Processed prompts:  45%|████▌     | 464/1024 [09:36<30:58,  3.32s/it, est. speed input: 107.50 toks/s, output: 1065.94 toks/s][A
+Processed prompts:  47%|████▋     | 480/1024 [09:46<22:43,  2.51s/it, est. speed input: 108.00 toks/s, output: 1064.72 toks/s][A
+Processed prompts:  48%|████▊     | 496/1024 [09:47<15:33,  1.77s/it, est. speed input: 113.82 toks/s, output: 1221.01 toks/s][A
+Processed prompts:  50%|█████     | 512/1024 [11:43<29:05,  3.41s/it, est. speed input: 97.54 toks/s, output: 1136.45 toks/s] [A
+Processed prompts:  52%|█████▏    | 528/1024 [11:56<21:49,  2.64s/it, est. speed input: 101.35 toks/s, output: 1192.65 toks/s][A
+Processed prompts:  53%|█████▎    | 544/1024 [15:35<47:38,  5.96s/it, est. speed input: 79.30 toks/s, output: 918.40 toks/s]  [A
+Processed prompts:  55%|█████▍    | 560/1024 [15:52<34:37,  4.48s/it, est. speed input: 79.42 toks/s, output: 910.44 toks/s][A
+Processed prompts:  56%|█████▋    | 576/1024 [16:17<26:55,  3.61s/it, est. speed input: 78.75 toks/s, output: 891.86 toks/s][A
+Processed prompts:  58%|█████▊    | 592/1024 [16:18<18:19,  2.55s/it, est. speed input: 80.90 toks/s, output: 897.96 toks/s][A
+Processed prompts:  58%|█████▊    | 592/1024 [16:29<18:19,  2.55s/it, est. speed input: 80.90 toks/s, output: 897.96 toks/s][A
+Processed prompts:  59%|█████▉    | 608/1024 [17:01<17:58,  2.59s/it, est. speed input: 79.80 toks/s, output: 912.32 toks/s][A
+Processed prompts:  61%|██████    | 624/1024 [17:16<13:59,  2.10s/it, est. speed input: 86.30 toks/s, output: 907.55 toks/s][A
+Processed prompts:  62%|██████▎   | 640/1024 [17:42<12:29,  1.95s/it, est. speed input: 86.21 toks/s, output: 921.87 toks/s][A
+Processed prompts:  64%|██████▍   | 656/1024 [17:44<08:37,  1.41s/it, est. speed input: 87.84 toks/s, output: 932.58 toks/s][A
+Processed prompts:  66%|██████▌   | 672/1024 [18:15<09:09,  1.56s/it, est. speed input: 86.58 toks/s, output: 922.48 toks/s][A
+Processed prompts:  67%|██████▋   | 688/1024 [18:17<06:18,  1.13s/it, est. speed input: 87.86 toks/s, output: 941.10 toks/s][A
+Processed prompts:  69%|██████▉   | 704/1024 [18:42<06:44,  1.27s/it, est. speed input: 87.64 toks/s, output: 925.26 toks/s][A
+Processed prompts:  70%|███████   | 720/1024 [18:44<04:37,  1.10it/s, est. speed input: 88.81 toks/s, output: 939.63 toks/s][A
+Processed prompts:  72%|███████▏  | 736/1024 [19:11<05:28,  1.14s/it, est. speed input: 93.80 toks/s, output: 934.17 toks/s][A
+Processed prompts:  73%|███████▎  | 752/1024 [19:22<04:35,  1.01s/it, est. speed input: 94.32 toks/s, output: 933.54 toks/s][A
+Processed prompts:  75%|███████▌  | 768/1024 [19:26<03:23,  1.26it/s, est. speed input: 95.23 toks/s, output: 938.23 toks/s][A
+Processed prompts:  77%|███████▋  | 784/1024 [19:37<03:02,  1.31it/s, est. speed input: 96.50 toks/s, output: 1057.22 toks/s][A
+Processed prompts:  78%|███████▊  | 800/1024 [19:44<02:27,  1.52it/s, est. speed input: 97.38 toks/s, output: 1080.74 toks/s][A
+Processed prompts:  80%|███████▉  | 816/1024 [19:53<02:10,  1.59it/s, est. speed input: 98.35 toks/s, output: 1113.37 toks/s][A
+Processed prompts:  81%|████████▏ | 832/1024 [19:59<01:46,  1.81it/s, est. speed input: 100.63 toks/s, output: 1137.99 toks/s][A
+Processed prompts:  83%|████████▎ | 848/1024 [20:00<01:09,  2.52it/s, est. speed input: 103.07 toks/s, output: 1160.74 toks/s][A
+Processed prompts:  84%|████████▍ | 864/1024 [20:05<01:01,  2.58it/s, est. speed input: 106.47 toks/s, output: 1176.68 toks/s][A
+Processed prompts:  86%|████████▌ | 880/1024 [20:10<00:50,  2.86it/s, est. speed input: 107.71 toks/s, output: 1207.32 toks/s][A
+Processed prompts:  88%|████████▊ | 896/1024 [20:13<00:40,  3.15it/s, est. speed input: 108.46 toks/s, output: 1214.99 toks/s][A
+Processed prompts:  89%|████████▉ | 912/1024 [20:21<00:40,  2.75it/s, est. speed input: 109.27 toks/s, output: 1229.12 toks/s][A
+Processed prompts:  91%|█████████ | 928/1024 [20:28<00:37,  2.58it/s, est. speed input: 110.39 toks/s, output: 1253.70 toks/s][A
+Processed prompts:  92%|█████████▏| 944/1024 [20:33<00:28,  2.80it/s, est. speed input: 111.78 toks/s, output: 1276.98 toks/s][A
+Processed prompts:  94%|█████████▍| 960/1024 [20:38<00:22,  2.83it/s, est. speed input: 112.90 toks/s, output: 1303.14 toks/s][A
+Processed prompts:  95%|█████████▌| 976/1024 [20:39<00:12,  3.71it/s, est. speed input: 115.92 toks/s, output: 1447.23 toks/s][A
+Processed prompts:  97%|█████████▋| 992/1024 [20:42<00:07,  4.20it/s, est. speed input: 118.60 toks/s, output: 1464.28 toks/s][A
+Processed prompts:  98%|█████████▊| 1008/1024 [20:53<00:05,  2.72it/s, est. speed input: 119.11 toks/s, output: 1484.53 toks/s][A
+Processed prompts: 100%|██████████| 1024/1024 [22:15<00:00,  1.81s/it, est. speed input: 113.51 toks/s, output: 1466.30 toks/s][A
+Processed prompts: 100%|██████████| 1024/1024 [22:15<00:00,  1.81s/it, est. speed input: 113.51 toks/s, output: 1466.30 toks/s][AProcessed prompts: 100%|██████████| 1024/1024 [22:15<00:00,  1.30s/it, est. speed input: 113.51 toks/s, output: 1466.30 toks/s]
+Batches:   0%|          | 0/2 [22:53<?, ?it/s]
+Traceback (most recent call last):
+  File "/u/scandussio/entropy/scripts/collect_traces.py", line 153, in <module>
+    fire.Fire(main)
+  File "/u/scandussio/entropy/.venv-traces/lib/python3.10/site-packages/fire/core.py", line 135, in Fire
+    component_trace = _Fire(component, args, parsed_flag_args, context, name)
+  File "/u/scandussio/entropy/.venv-traces/lib/python3.10/site-packages/fire/core.py", line 468, in _Fire
+    component, remaining_args = _CallAndUpdateTrace(
+  File "/u/scandussio/entropy/.venv-traces/lib/python3.10/site-packages/fire/core.py", line 684, in _CallAndUpdateTrace
+    component = fn(*varargs, **kwargs)
+  File "/u/scandussio/entropy/scripts/collect_traces.py", line 142, in main
+    all_results = json.load(f)
+  File "/opt/spack/opt/spack/linux-rocky9-x86_64/gcc-13.2.0/miniconda3-22.11.1-tn534fvb4uy4wrf7m2zcwpiycdzlebd6/lib/python3.10/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "/opt/spack/opt/spack/linux-rocky9-x86_64/gcc-13.2.0/miniconda3-22.11.1-tn534fvb4uy4wrf7m2zcwpiycdzlebd6/lib/python3.10/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "/opt/spack/opt/spack/linux-rocky9-x86_64/gcc-13.2.0/miniconda3-22.11.1-tn534fvb4uy4wrf7m2zcwpiycdzlebd6/lib/python3.10/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "/opt/spack/opt/spack/linux-rocky9-x86_64/gcc-13.2.0/miniconda3-22.11.1-tn534fvb4uy4wrf7m2zcwpiycdzlebd6/lib/python3.10/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 345954 column 5 (char 8060470)
+(EngineCore pid=110097) INFO 07-01 04:38:03 [core.py:1178] [shutdown] EngineCore: trigger received signal=SIGTERM
+(EngineCore pid=110097) INFO 07-01 04:38:03 [core.py:1297] [shutdown] EngineCore: start mode=abort timeout=0s
+(EngineCore pid=110097) INFO 07-01 04:38:03 [core.py:1328] [shutdown] EngineCore: request processing complete; starting resource teardown
+(EngineCore pid=110097) INFO 07-01 04:38:03 [core.py:1191] [shutdown] EngineCore: exiting busy loop
+WARNING 07-01 04:38:04 [core_client.py:699] [shutdown] MPClient: engine core exited unexpectedly; starting cleanup
+INFO 07-01 04:38:04 [core_client.py:652] [shutdown] MPClient: start timeout=default
+INFO 07-01 04:38:04 [core_client.py:654] [shutdown] MPClient: stopping engine manager
+INFO 07-01 04:38:04 [core_client.py:656] [shutdown] MPClient: engine manager stopped
+INFO 07-01 04:38:04 [core_client.py:657] [shutdown] MPClient: cleaning up background resources
+INFO 07-01 04:38:04 [core_client.py:659] [shutdown] MPClient: complete

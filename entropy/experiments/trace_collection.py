@@ -7,6 +7,7 @@ Changes vs original:
   - BaseCfg replaced with a simpler TraceCollectionCfg dataclass
   - Removed teacher_model_name (unused here)
   - Same forward-pass logic, same output format (question_XXXX.pth + .jsonl)
+  - OOM handled gracefully: traces that don't fit in memory are skipped
 
 Output format per question_XXXX.pth
 ------------------------------------
@@ -33,7 +34,7 @@ Output format per question_XXXX.pth
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +55,7 @@ class TraceCollectionCfg:
     top_k_for_entropy: int = 20
     max_traces: int | None = None
     max_seq_length: int | None = None
+    max_questions: int | None = None
     layers: list[int] | list[float] | None = None
     quantization: str | None = None
     attn_implementation: str | None = None
@@ -62,11 +64,12 @@ class TraceCollectionCfg:
 class TraceActivationEntropy:
     """Collect activations and per-token entropy from pre-generated traces.
 
-    Ported from neurohike TraceActivationEntropy — same algorithm, same output
-    format.  Supports:
+    Supports:
       - All model layers (default) or specific layers by index or percentile
       - Resumability (skips already-saved question_XXXX.pth files)
-      - max_seq_length guard against OOM (set to 7000 for 80 GB GPUs)
+      - OOM handling: traces too long for GPU memory are skipped gracefully
+      - max_seq_length as optional soft hint (skip before attempting forward pass)
+      - max_questions limit for testing
     """
 
     def __init__(self, cfg: TraceCollectionCfg):
@@ -76,6 +79,9 @@ class TraceActivationEntropy:
 
         print(f"Loading traces for {cfg.model_name} on {cfg.data_name}")
         self.reasoning_traces = get_reasoning_traces(cfg.model_name, cfg.data_name)
+        if cfg.max_questions is not None:
+            self.reasoning_traces = self.reasoning_traces[:cfg.max_questions]
+            print(f"  Limiting to {cfg.max_questions} question(s)")
         print(f"  {len(self.reasoning_traces)} questions loaded")
 
         print(f"Loading model {cfg.model_name}")
@@ -116,16 +122,24 @@ class TraceActivationEntropy:
         prompt_tokens: list[int],
         trace_tokens: list[int],
         vllm_entropy: list[float],
-    ) -> dict[str, Any]:
-        """Forward pass with hidden states; collect activations + HF entropies."""
+    ) -> dict[str, Any] | None:
+        """Forward pass with hidden states; collect activations + HF entropies.
+
+        Returns None if the sequence is too long to fit in GPU memory.
+        """
         prompt_len = len(prompt_tokens)
         trace_len = len(trace_tokens)
         full_ids = torch.tensor(
             [prompt_tokens + trace_tokens], dtype=torch.long, device=self.model.device
         )
 
-        with torch.no_grad():
-            outputs = self.model(full_ids, output_hidden_states=True, use_cache=False)
+        try:
+            with torch.no_grad():
+                outputs = self.model(full_ids, output_hidden_states=True, use_cache=False)
+        except torch.OutOfMemoryError:
+            del full_ids
+            torch.cuda.empty_cache()
+            return None
 
         # Entropies for trace tokens
         logits_cpu = outputs.logits[0].detach().cpu()
@@ -186,14 +200,21 @@ class TraceActivationEntropy:
             for i, text in enumerate(tqdm(ele.get("traces", []), desc="  Traces",
                                           leave=False, colour="green")):
                 seq_len = len(prompt_tokens) + len(ele["traces_tokens"][i])
+
+                # Optional soft cap: skip before attempting forward pass
                 if self.cfg.max_seq_length and seq_len > self.cfg.max_seq_length:
                     tqdm.write(f"  Skipping q{idx} t{i}: {seq_len} > {self.cfg.max_seq_length}")
                     continue
+
                 result = self._collect_from_trace(
                     text, prompt_tokens,
                     ele["traces_tokens"][i],
                     ele["traces_entropy"][i],
                 )
+                if result is None:
+                    tqdm.write(f"  OOM q{idx} t{i}: seq_len={seq_len}, skipping")
+                    continue
+
                 traces_out.append(result)
                 count += 1
                 if self.cfg.max_traces and count >= self.cfg.max_traces:

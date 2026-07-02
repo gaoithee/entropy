@@ -31,11 +31,12 @@ def get_data(data_name: str) -> list[tuple[str, int | str]]:
 
     if "aime_2024" in data_name.casefold():
         dataset = load_dataset("HuggingFaceH4/aime_2024", split="train")
+        instr = "\nAnswer by placing your final answer in a \\boxed{} environment."
         out = []
         for item in dataset:
             try:
                 ans = str(item["answer"]).strip().replace(r"\\boxed{", "").replace("}", "")
-                out.append((item["problem"], int(ans)))
+                out.append((item["problem"] + instr, int(ans)))
             except (ValueError, KeyError):
                 continue
         return out
@@ -55,7 +56,7 @@ def get_data(data_name: str) -> list[tuple[str, int | str]]:
         dataset = load_dataset("TIGER-Lab/MMLU-Pro", split="validation")
         filtered = [e for e in dataset if e["category"] != "math"]
         out = []
-        instr = "\nAnswer with the letter corresponding to the correct option."
+        instr = "\nAnswer with the letter corresponding to the correct option in a \\boxed{} environment."
         for item in filtered:
             try:
                 opts = "\n".join(f"{chr(65+i)}. {o}" for i, o in enumerate(item["options"]))

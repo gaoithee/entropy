@@ -1,0 +1,268 @@
+Job 2: model=openai/gpt-oss-20b dataset=gpqa
+Skipping import of cpp extensions due to incompatible torch version 2.9.0+cu128 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+Loading traces for openai/gpt-oss-20b on gpqa
+  198 questions loaded
+Loading model openai/gpt-oss-20b
+Fetching 42 files:   0%|          | 0/42 [00:00<?, ?it/s]Fetching 42 files: 100%|██████████| 42/42 [00:00<00:00, 2655.34it/s]
+Loading weights:   0%|          | 0/411 [00:00<?, ?it/s]Loading weights:   0%|          | 1/411 [00:00<00:58,  7.03it/s]Loading weights:   0%|          | 2/411 [00:00<01:34,  4.35it/s]Loading weights:   5%|▌         | 21/411 [00:00<00:08, 47.42it/s]Loading weights:   8%|▊         | 33/411 [00:00<00:05, 64.83it/s]Loading weights:  10%|█         | 42/411 [00:00<00:05, 66.72it/s]Loading weights:  14%|█▍        | 58/411 [00:01<00:05, 69.54it/s]Loading weights:  18%|█▊        | 73/411 [00:01<00:04, 80.94it/s]Loading weights:  22%|██▏       | 91/411 [00:01<00:03, 94.82it/s]Loading weights:  25%|██▍       | 102/411 [00:01<00:03, 85.68it/s]Loading weights:  27%|██▋       | 112/411 [00:01<00:03, 78.69it/s]Loading weights:  30%|███       | 124/411 [00:01<00:03, 86.90it/s]Loading weights:  33%|███▎      | 134/411 [00:01<00:03, 85.54it/s]Loading weights:  35%|███▍      | 143/411 [00:02<00:03, 76.16it/s]Loading weights:  38%|███▊      | 156/411 [00:02<00:02, 87.35it/s]Loading weights:  40%|████      | 166/411 [00:02<00:03, 77.23it/s]Loading weights:  43%|████▎     | 177/411 [00:02<00:03, 70.72it/s]Loading weights:  46%|████▋     | 191/411 [00:02<00:02, 75.06it/s]Loading weights:  48%|████▊     | 199/411 [00:02<00:03, 64.31it/s]Loading weights:  51%|█████     | 209/411 [00:02<00:02, 69.99it/s]Loading weights:  53%|█████▎    | 217/411 [00:03<00:02, 66.51it/s]Loading weights:  55%|█████▌    | 228/411 [00:03<00:02, 62.55it/s]Loading weights:  60%|█████▉    | 245/411 [00:03<00:02, 72.92it/s]Loading weights:  63%|██████▎   | 259/411 [00:03<00:02, 69.80it/s]Loading weights:  68%|██████▊   | 278/411 [00:03<00:01, 76.84it/s]Loading weights:  72%|███████▏  | 294/411 [00:04<00:01, 77.83it/s]Loading weights:  75%|███████▌  | 310/411 [00:04<00:01, 86.68it/s]Loading weights:  78%|███████▊  | 319/411 [00:04<00:01, 71.95it/s]Loading weights:  80%|███████▉  | 327/411 [00:04<00:01, 70.90it/s]Loading weights:  82%|████████▏ | 335/411 [00:04<00:01, 68.57it/s]Loading weights:  84%|████████▍ | 346/411 [00:04<00:00, 65.53it/s]Loading weights:  88%|████████▊ | 362/411 [00:04<00:00, 84.88it/s]Loading weights:  92%|█████████▏| 378/411 [00:05<00:00, 94.76it/s]Loading weights:  95%|█████████▍| 389/411 [00:05<00:00, 87.56it/s]Loading weights:  97%|█████████▋| 399/411 [00:05<00:00, 70.14it/s]Loading weights: 100%|██████████| 411/411 [00:05<00:00, 74.69it/s]
+  Collecting 24 / 24 layers
+Questions:   0%|[34m          [0m| 0/198 [00:00<?, ?it/s]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:05<00:41,  5.98s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:13<00:40,  6.76s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:20<00:34,  6.93s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [00:28<00:29,  7.27s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [00:36<00:23,  7.79s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [00:42<00:13,  6.88s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [00:46<00:06,  6.18s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [00:58<00:00,  7.92s/it][A
+                                                       [AQuestions:   1%|[34m          [0m| 1/198 [00:59<3:15:33, 59.56s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:15<01:51, 15.95s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:26<01:16, 12.68s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:49<01:26, 17.35s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:14<01:21, 20.44s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [01:28<00:54, 18.24s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [01:41<00:32, 16.35s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [01:52<00:14, 14.74s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [02:07<00:00, 14.60s/it][A
+                                                       [AQuestions:   1%|[34m          [0m| 2/198 [03:09<5:30:02, 101.03s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:10<01:10, 10.02s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:26<01:24, 14.02s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:40<01:10, 14.04s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [00:51<00:51, 12.82s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [01:04<00:37, 12.66s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [01:24<00:30, 15.10s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [01:38<00:14, 14.99s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [01:50<00:00, 13.97s/it][A
+                                                       [AQuestions:   2%|[34m▏         [0m| 3/198 [05:03<5:47:57, 107.06s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:37<04:21, 37.34s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [01:00<02:54, 29.09s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [01:14<01:50, 22.15s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:30<01:18, 19.55s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [01:43<00:51, 17.19s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [02:13<00:43, 21.78s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [02:35<00:21, 21.81s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [02:56<00:00, 21.53s/it][A
+                                                       [AQuestions:   2%|[34m▏         [0m| 4/198 [08:05<7:21:19, 136.49s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:14<01:41, 14.56s/it][A                                                             
+                                                       [AQuestions:   2%|[34m▏         [0m| 4/198 [08:20<7:21:19, 136.49s/it]
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:14<01:41, 14.56s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:42<01:10, 14.08s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:04<01:07, 16.89s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:23<01:52, 37.54s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [02:49<01:07, 33.83s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [03:16<00:31, 31.50s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [03:53<00:00, 33.24s/it][A
+                                                       [AQuestions:   3%|[34m▎         [0m| 5/198 [12:04<9:18:30, 173.63s/it]  Skipping q4 t1: 7982 > 7000
+
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:38<04:27, 38.25s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [01:09<03:23, 33.86s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [01:32<02:26, 29.29s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:49<01:37, 24.36s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:03<01:01, 20.65s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [02:25<00:42, 21.05s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [03:01<00:25, 25.96s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [03:20<00:00, 23.74s/it][A
+                                                       [AQuestions:   3%|[34m▎         [0m| 6/198 [15:31<9:51:13, 184.76s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:48<05:37, 48.16s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [01:08<03:10, 31.69s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [01:45<02:50, 34.17s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [02:26<02:27, 36.80s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:56<01:42, 34.32s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [03:14<00:57, 28.97s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [03:32<00:25, 25.26s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [04:57<00:00, 44.33s/it][A
+                                                       [AQuestions:   4%|[34m▎         [0m| 7/198 [20:36<11:53:42, 224.20s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:15<01:51, 15.92s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:51<02:46, 27.68s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [01:10<01:56, 23.39s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:39<01:43, 25.77s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:16<01:29, 29.95s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [02:49<01:01, 30.79s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [03:22<00:31, 31.48s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [03:39<00:00, 26.98s/it][A
+                                                       [AQuestions:   4%|[34m▍         [0m| 8/198 [24:22<11:51:43, 224.76s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:19<02:18, 19.82s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:36<01:46, 17.76s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:48<01:16, 15.23s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:23<01:32, 23.05s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [01:59<01:22, 27.58s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [02:21<00:51, 25.76s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [02:47<00:25, 25.79s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [03:06<00:00, 23.75s/it][A
+                                                       [AQuestions:   5%|[34m▍         [0m| 9/198 [27:34<11:15:36, 214.48s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:43<05:01, 43.06s/it][A                                                              
+                                                       [AQuestions:   5%|[34m▍         [0m| 9/198 [28:17<11:15:36, 214.48s/it]
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:43<05:01, 43.06s/it][A                                                              
+                                                       [AQuestions:   5%|[34m▍         [0m| 9/198 [28:17<11:15:36, 214.48s/it]
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:43<05:01, 43.06s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:23<01:16, 19.05s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:07<01:18, 26.02s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [03:17<01:17, 38.56s/it][A                                                              
+                                                       [AQuestions:   5%|[34m▍         [0m| 9/198 [30:52<11:15:36, 214.48s/it]
+  Traces:  75%|[32m███████▌  [0m| 6/8 [03:17<01:17, 38.56s/it][A                                                              
+                                                       [AQuestions:   5%|[34m▍         [0m| 9/198 [30:52<11:15:36, 214.48s/it]
+  Traces:  75%|[32m███████▌  [0m| 6/8 [03:17<01:17, 38.56s/it][A
+                                                       [AQuestions:   5%|[34m▌         [0m| 10/198 [30:57<11:01:11, 211.02s/it]  Skipping q9 t1: 8701 > 7000
+  Skipping q9 t2: 7589 > 7000
+  Skipping q9 t6: 11943 > 7000
+  Skipping q9 t7: 8497 > 7000
+
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:19<02:19, 19.90s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [01:11<03:49, 38.29s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [01:53<03:21, 40.35s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [02:32<02:38, 39.62s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:51<01:36, 32.09s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [03:24<01:05, 32.60s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [03:53<00:31, 31.45s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [04:32<00:00, 33.77s/it][A
+                                                       [AQuestions:   6%|[34m▌         [0m| 11/198 [35:37<12:03:33, 232.16s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:10<01:16, 10.94s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:15<00:43,  7.31s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:20<00:31,  6.35s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [00:32<00:33,  8.32s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [00:36<00:20,  6.97s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [00:48<00:17,  8.59s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [00:57<00:08,  8.57s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [01:04<00:00,  8.28s/it][A
+                                                       [AQuestions:   6%|[34m▌         [0m| 12/198 [36:44<9:23:15, 181.70s/it] 
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:36<04:14, 36.31s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [01:04<03:10, 31.70s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [01:56<03:23, 40.72s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [02:19<02:14, 33.70s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:49<01:37, 32.44s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [03:19<01:03, 31.56s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [03:57<00:33, 33.89s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [04:30<00:00, 33.59s/it][A
+                                                       [AQuestions:   7%|[34m▋         [0m| 13/198 [41:22<10:50:11, 210.87s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:18<02:12, 18.88s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:36<01:47, 17.92s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:46<01:12, 14.41s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:29<01:43, 25.82s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [01:52<01:14, 24.76s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [02:04<00:40, 20.33s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [02:18<00:18, 18.46s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [02:30<00:00, 16.42s/it][A
+                                                       [AQuestions:   7%|[34m▋         [0m| 14/198 [43:56<9:54:32, 193.87s/it] 
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:09<01:06,  9.44s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:15<00:44,  7.38s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:24<00:40,  8.02s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [00:33<00:34,  8.59s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [00:41<00:24,  8.21s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [01:06<00:28, 14.16s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [01:15<00:12, 12.51s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [01:27<00:00, 12.20s/it][A
+                                                       [AQuestions:   8%|[34m▊         [0m| 15/198 [45:26<8:15:23, 162.42s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:36<04:18, 36.87s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [01:29<04:37, 46.17s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [02:27<04:16, 51.37s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [03:32<03:48, 57.06s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [04:11<02:30, 50.31s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [05:09<01:45, 52.98s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [06:04<00:53, 53.72s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [06:29<00:00, 44.44s/it][A
+                                                       [AQuestions:   8%|[34m▊         [0m| 16/198 [52:06<11:49:35, 233.93s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:57<06:39, 57.01s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [01:30<04:20, 43.41s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [01:51<02:44, 32.97s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [02:30<02:22, 35.50s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [02:50<01:29, 29.88s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [03:42<01:14, 37.43s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [04:00<00:30, 30.95s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [04:23<00:00, 28.43s/it][A
+                                                       [AQuestions:   9%|[34m▊         [0m| 17/198 [56:36<12:18:54, 244.94s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:13<01:36, 13.82s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:31<01:37, 16.25s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:48<01:23, 16.67s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:03<01:02, 15.68s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [01:26<00:55, 18.40s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [01:41<00:34, 17.36s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [01:59<00:17, 17.56s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [02:10<00:00, 15.59s/it][A
+                                                       [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A                                                               
+                                               [AQuestions:   9%|[34m▉         [0m| 18/198 [58:50<10:34:52, 211.62s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+                                               [A  Skipping q18 t0: 16584 > 7000
+  Skipping q18 t1: 16584 > 7000
+  Skipping q18 t2: 16584 > 7000
+  Skipping q18 t3: 12390 > 7000
+  Skipping q18 t4: 16584 > 7000
+  Skipping q18 t5: 16584 > 7000
+  Skipping q18 t6: 16584 > 7000
+  Skipping q18 t7: 16584 > 7000
+
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:13<01:35, 13.68s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:33<01:42, 17.13s/it][A
+  Traces:  38%|[32m███▊      [0m| 3/8 [00:47<01:20, 16.03s/it][A
+  Traces:  50%|[32m█████     [0m| 4/8 [01:07<01:09, 17.48s/it][A
+  Traces:  62%|[32m██████▎   [0m| 5/8 [01:27<00:54, 18.32s/it][A
+  Traces:  75%|[32m███████▌  [0m| 6/8 [01:47<00:37, 18.92s/it][A
+  Traces:  88%|[32m████████▊ [0m| 7/8 [02:04<00:18, 18.17s/it][A
+  Traces: 100%|[32m██████████[0m| 8/8 [02:24<00:00, 18.71s/it][A
+                                                       [AQuestions:  10%|[34m█         [0m| 20/198 [1:01:18<7:18:47, 147.91s/it]
+  Traces:   0%|[32m          [0m| 0/8 [00:00<?, ?it/s][A
+  Traces:  12%|[32m█▎        [0m| 1/8 [00:26<03:07, 26.73s/it][A
+  Traces:  25%|[32m██▌       [0m| 2/8 [00:44<02:08, 21.39s/it][A                                                                             
+
+
+                                                       [AQuestions:  10%|[34m█         [0m| 20/198 [1:03:04<9:21:20, 189.21s/it]
+Traceback (most recent call last):
+  File "/u/scandussio/entropy/scripts/collect_activations.py", line 54, in <module>
+    fire.Fire(main)
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/fire/core.py", line 135, in Fire
+    component_trace = _Fire(component, args, parsed_flag_args, context, name)
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/fire/core.py", line 468, in _Fire
+    component, remaining_args = _CallAndUpdateTrace(
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/fire/core.py", line 684, in _CallAndUpdateTrace
+    component = fn(*varargs, **kwargs)
+  File "/u/scandussio/entropy/scripts/collect_activations.py", line 50, in main
+    TraceActivationEntropy(cfg).run()
+  File "/u/scandussio/entropy/entropy/experiments/trace_collection.py", line 200, in run
+    for i, text in enumerate(tqdm(ele.get("traces", []), desc="  Traces",
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/tqdm/std.py", line 1191, in __iter__
+    self.update(n - last_print_n)
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/tqdm/std.py", line 1242, in update
+    self.refresh(lock_args=self.lock_args)
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/tqdm/std.py", line 1347, in refresh
+    self.display()
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/tqdm/std.py", line 1494, in display
+    self.moveto(pos)
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/tqdm/std.py", line 1443, in moveto
+    self.fp.write('\n' * n + _term_move_up() * -n)
+  File "/u/scandussio/entropy/.venv/lib/python3.10/site-packages/tqdm/utils.py", line 179, in inner
+    return func(*args, **kwargs)
+OSError: [Errno 28] No space left on device
+Done. Output: outputs/openai_gpt-oss-20b/gpqa

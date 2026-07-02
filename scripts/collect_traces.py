@@ -31,14 +31,19 @@ def main(
     resume: bool = True,
     quantization: Optional[str] = None,
     gpu_memory_utilization: float = 0.9,
+    max_model_len: int = 22000,
+    num_questions: Optional[int] = None,
     **gen_kwargs,
 ):
     print(f"Loading dataset: {data_name}")
     reasoning_dataset = get_data(data_name)
     print(f"Loaded {len(reasoning_dataset)} examples")
+    if num_questions is not None:
+        reasoning_dataset = reasoning_dataset[:num_questions]
+        print(f"Limiting to {num_questions} question(s)")
 
     print(f"Loading model: {model_name}")
-    llm = LLM(model=model_name, tensor_parallel_size=1, trust_remote_code=True, quantization=quantization, gpu_memory_utilization=gpu_memory_utilization)
+    llm = LLM(model=model_name, tensor_parallel_size=1, trust_remote_code=True, quantization=quantization, gpu_memory_utilization=gpu_memory_utilization, max_model_len=max_model_len)
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
     # enable_thinking for models that require it
@@ -50,7 +55,7 @@ def main(
     default_gen_kwargs = {"temperature": 0.7, "top_p": 0.9, "max_tokens": 16_384}
     gen_kwargs = {**default_gen_kwargs, **gen_kwargs}
     top_k_entropy = 20
-    sampling_params = SamplingParams(n=num_out, logprobs=top_k_entropy, **gen_kwargs)
+    sampling_params = SamplingParams(n=num_out, logprobs=top_k_entropy, skip_special_tokens=False, **gen_kwargs)
 
     dataset_short_name = data_name.split("/")[-1]
     model_short_name = model_name.split("/")[-1]
@@ -69,6 +74,10 @@ def main(
         prompts.append(prompt)
 
     # Resume support
+    if not resume and final_file.exists():
+        print(f"resume=False: overwriting existing {final_file}")
+        final_file.unlink()
+
     processed_indices = set()
     if resume and final_file.exists():
         try:
