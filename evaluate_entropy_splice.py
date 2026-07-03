@@ -101,6 +101,120 @@ def collect_residual_stream(lm: LanguageModel, num_layers: int, tokens: torch.Te
     return torch.stack(out, dim=0)
 
 
+def load_precomputed_full_resid(
+    pth_dir: str,
+    q_idx: int,
+    t_idx: int,
+    expected_trace_tokens: List[int],
+    prompt_len: int,
+    num_layers: int,
+    device,
+    debug: bool = False,
+) -> Optional[torch.Tensor]:
+    """Load precomputed activations from a CompressionBase-style question_XXXX.pth
+    file, and reshape them into the [num_layers, prompt_len + trace_len, hidden_dim]
+    layout that generate_with_patching()/collect_residual_stream() already produce,
+    so the rest of the patching pipeline needs ZERO changes to consume either source.
+
+    CompressionBase .pth format (question_{q_idx:04d}.pth):
+        {"prompt_tokens": [...], "GT_answer": ..., "traces": [
+            {"tokens": [...trace tokens only, NOT including prompt...],
+             "activations": Tensor[num_trace_tokens, num_layers, hidden_dim],
+             "entropies_hf": [...]},
+            ...
+        ]}
+
+    IMPORTANT: the stored activations are indexed against `trace["tokens"]`
+    (trace-only, no prompt prepended) -- NOT against full_ids_list
+    (prompt_tokens + trace_tokens) like our own full_resid. This function pads
+    the prompt-region with zeros (safe: patching only ever touches positions
+    inside the thinking region, i.e. always >= prompt_len, so the zero-filled
+    prompt region of the returned tensor is never read) and places the loaded
+    activations at the correct absolute offset.
+
+    Returns None (falls back to live collect_residual_stream in the caller) if:
+      - the file/trace doesn't exist,
+      - the stored trace tokens don't match expected_trace_tokens (different
+        temperature/sampling run than the one in teacher_traces.json would
+        silently misalign every position index otherwise -- this is checked
+        explicitly rather than assumed, since a silent mismatch would corrupt
+        every downstream patching result without any visible error),
+      - the layer/hidden_dim shape looks inconsistent with what the live model
+        would have produced (best-effort check only; a genuine mismatch here
+        usually means wrong model/checkpoint).
+    """
+    pth_path = Path(pth_dir) / f"question_{q_idx:04d}.pth"
+    if not pth_path.exists():
+        if debug:
+            print(f"    [DEBUG] precomputed activations: {pth_path} not found, "
+                  f"falling back to live collect_residual_stream")
+        return None
+
+    try:
+        question_data = torch.load(pth_path, weights_only=False)
+    except Exception as e:
+        print(f"  [WARNING] failed to load {pth_path}: {e} -- falling back to live compute")
+        return None
+
+    traces = question_data.get("traces")
+    if traces is None or t_idx >= len(traces):
+        if debug:
+            print(f"    [DEBUG] precomputed activations: trace {t_idx} not found in "
+                  f"{pth_path} ({len(traces) if traces else 0} traces available), "
+                  f"falling back to live collect_residual_stream")
+        return None
+
+    trace = traces[t_idx]
+    stored_tokens = trace.get("tokens")
+    stored_activations = trace.get("activations")
+    if stored_tokens is None or stored_activations is None:
+        if debug:
+            print(f"    [DEBUG] precomputed activations: trace {t_idx} missing "
+                  f"'tokens'/'activations' keys, falling back to live compute")
+        return None
+
+    # CRITICAL validation: positions in reached_positions/random_positions are
+    # absolute indices into full_ids_list = prompt_tokens + trace_tokens, built
+    # from teacher_traces.json. If the .pth trace_tokens don't match EXACTLY
+    # (e.g. it came from a different generation run, different seed/sampling),
+    # every patched position would silently pull the WRONG activation -- with
+    # no crash, no error, just quietly wrong results. Check before trusting it.
+    if list(stored_tokens) != list(expected_trace_tokens):
+        print(f"  [WARNING] Q{q_idx} T{t_idx}: precomputed .pth trace_tokens do NOT "
+              f"match teacher_traces.json trace_tokens for this question/trace "
+              f"(len {len(stored_tokens)} vs {len(expected_trace_tokens)}, or content "
+              f"differs) -- these are likely from different generation runs. "
+              f"Falling back to live collect_residual_stream to avoid silently "
+              f"misaligned patching.")
+        return None
+
+    # stored_activations: [num_trace_tokens, num_layers, hidden_dim]
+    if stored_activations.dim() != 3 or stored_activations.shape[1] != num_layers:
+        print(f"  [WARNING] Q{q_idx} T{t_idx}: precomputed activations shape "
+              f"{tuple(stored_activations.shape)} inconsistent with expected "
+              f"num_layers={num_layers} at dim 1 -- falling back to live compute "
+              f"(wrong model/checkpoint?)")
+        return None
+
+    hidden_dim = stored_activations.shape[2]
+    trace_len = stored_activations.shape[0]
+
+    # Reshape [trace_len, num_layers, hidden_dim] -> [num_layers, trace_len, hidden_dim]
+    trace_resid = stored_activations.permute(1, 0, 2).to(device)
+
+    # Zero-pad the prompt region -- never read by generate_with_patching since
+    # patched positions are always >= prompt_len (inside the thinking region).
+    prompt_pad = torch.zeros((num_layers, prompt_len, hidden_dim), device=device, dtype=trace_resid.dtype)
+    full_resid = torch.cat([prompt_pad, trace_resid], dim=1)
+
+    if debug:
+        print(f"    [DEBUG] precomputed activations: loaded from {pth_path}, "
+              f"trace_len={trace_len}, num_layers={num_layers}, hidden_dim={hidden_dim} "
+              f"-- SKIPPING live forward pass for this trace")
+
+    return full_resid
+
+
 def generate_with_patching(
     lm: LanguageModel,
     num_layers: int,
@@ -294,13 +408,34 @@ def _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, mode):
     return sorted(i for _, i in indexed[:num_peaks])
 
 
-def _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0):
+_NUMERIC_RE = re.compile(r"\d")
+
+
+def _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0, filter_out=None):
     budget = _budget(start_pos, end_pos, retention_rate)
-    pattern = re.compile(r"\s*[+-]?\d[\d.,]*\s*$")
+    # ALIGNED with CompressionPatching._select_numbers (compression_patching.py):
+    # was previously `pattern.fullmatch(r"\s*[+-]?\d[\d.,]*\s*$")`, which required
+    # the ENTIRE decoded token to be a bare digit sequence -- tokens like "17_b",
+    # "b+7", "(28" (digit + attached math/LaTeX context, common in this dataset)
+    # never matched and were silently dropped, leaving only denuded digits with
+    # no surrounding structure (confirmed via --debug: reconstructed content was
+    # an unreadable digit blob like '17177979799979...'). CompressionPatching's
+    # `_select_numbers` uses a much looser `_NUMERIC_RE.search(r"\d")` -- any
+    # token containing a digit anywhere qualifies, keeping attached context.
     matched = [
         i for i in range(start_pos, end_pos)
-        if pattern.fullmatch(tokenizer.decode([tokens[i]]))
+        if _NUMERIC_RE.search(tokenizer.decode([tokens[i]]))
     ]
+    if filter_out is not None:
+        # Mirrors CompressionPooling's filter_out (compression_pooling.py):
+        # drop any matched position whose decoded token literally contains
+        # the ground-truth answer string, to avoid the selector trivially
+        # leaking the final answer through selection rather than through
+        # genuine compressed reasoning. OFF by default (filter_out=None) --
+        # only applied when the caller explicitly opts in via
+        # --filter_gt_answer, so existing runs/results are unaffected.
+        filter_str = str(filter_out)
+        matched = [i for i in matched if filter_str not in tokenizer.decode([tokens[i]])]
     if len(matched) > budget:
         # Random subsample among the matches, not the first `budget` in
         # position order -- taking the first N systematically concentrated
@@ -313,40 +448,64 @@ def _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate,
     return matched
 
 
-def _reached_newlines_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0):
+def _reached_newlines_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0, filter_out=None):
     budget = _budget(start_pos, end_pos, retention_rate)
+    # ALIGNED with CompressionPatching._select_newline: criterion was already
+    # equivalent ("\n" in decoded token text), aligning implementation exactly
+    # (precomputed set of newline-containing token ids over the full `tokens`
+    # vocabulary in range, not per-position redecoding) for parity.
+    newline_token_ids = {
+        tok for tok in tokens
+        if "\n" in tokenizer.decode([tok], skip_special_tokens=False)
+    }
     matched = [
         i for i in range(start_pos, end_pos)
-        if "\n" in tokenizer.decode([tokens[i]])
+        if tokens[i] in newline_token_ids
     ]
+    if filter_out is not None:
+        filter_str = str(filter_out)
+        matched = [i for i in matched if filter_str not in tokenizer.decode([tokens[i]])]
     if len(matched) > budget:
         rng = random.Random(seed)
         matched = sorted(rng.sample(matched, budget))
     return matched
 
 
-def _reached_end_of_sentence_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0):
+def _reached_end_of_sentence_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0, filter_out=None):
     budget = _budget(start_pos, end_pos, retention_rate)
+    # ALIGNED with CompressionPatching._select_end_of_sentence -- this is a
+    # real semantic change, not just an implementation detail:
+    # - Previously: built a cumulative running text over the whole thinking
+    #   region and matched `[.!?]\s` (period/exclaim/question + whitespace),
+    #   then mapped each match to the first token whose char-start was AT OR
+    #   AFTER the boundary -- which is actually the token that STARTS the
+    #   NEXT sentence, not the one ending the current one.
+    # - Now: token-pair based, matches ONLY '.' (not '!'/'?', matching their
+    #   scope exactly), and selects the token that itself CONTAINS the
+    #   sentence-ending period (either ".\n"/". " within one token, or a
+    #   token ending in "." whose immediate next token starts with "\n"/" ").
+    #   This keeps the period-bearing token itself in the compressed CoT,
+    #   which is the token that actually carries the "sentence just ended"
+    #   signal, rather than an arbitrary token from the following sentence.
+    decode_end = min(end_pos + 1, len(tokens))
+    decoded: dict = {}
+    for tok_id in set(tokens[start_pos:decode_end]):
+        decoded[tok_id] = tokenizer.decode([tok_id], skip_special_tokens=False)
 
-    ids_region = tokens[start_pos:end_pos]
-    token_texts = [tokenizer.decode([tid]) for tid in ids_region]
-    cumulative = ""
-    char_starts = []
-    for t in token_texts:
-        char_starts.append(len(cumulative))
-        cumulative += t
+    matched_set = set()
+    for i in range(start_pos, min(end_pos, len(tokens))):
+        text = decoded.get(tokens[i], "")
+        if ".\n" in text or ". " in text:
+            matched_set.add(i)
+        if text.endswith(".") and i + 1 < len(tokens):
+            next_text = decoded.get(tokens[i + 1], "")
+            if next_text.startswith("\n") or next_text.startswith(" "):
+                matched_set.add(i)
 
-    pattern = re.compile(r"[.!?]\s")
-    boundary_chars = [m.end() for m in pattern.finditer(cumulative)]
-
-    matched = []
-    for bc in boundary_chars:
-        for local_pos, cs in enumerate(char_starts):
-            if cs >= bc:
-                matched.append(start_pos + local_pos)
-                break
-
-    matched = sorted(set(matched))
+    matched = sorted(matched_set)
+    if filter_out is not None:
+        filter_str = str(filter_out)
+        matched = [i for i in matched if filter_str not in tokenizer.decode([tokens[i]])]
     if len(matched) > budget:
         rng = random.Random(seed)
         matched = sorted(rng.sample(matched, budget))
@@ -364,17 +523,17 @@ def _sample_random_positions(lo: int, hi: int, n_sample: int, exclude: List[int]
 _VALID_SELECTORS = ("low_entropy", "high_entropy", "numbers", "newlines", "end_of_sentence", "random")
 
 
-def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_rate, tokenizer, seed):
+def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_rate, tokenizer, seed, filter_out=None):
     if selector == "low_entropy":
         return _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, "low")
     elif selector == "high_entropy":
         return _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, "high")
     elif selector == "numbers":
-        return _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed)
+        return _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed, filter_out=filter_out)
     elif selector == "newlines":
-        return _reached_newlines_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed)
+        return _reached_newlines_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed, filter_out=filter_out)
     elif selector == "end_of_sentence":
-        return _reached_end_of_sentence_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed)
+        return _reached_end_of_sentence_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed, filter_out=filter_out)
     elif selector == "random":
         budget = _budget(start_pos, end_pos, retention_rate)
         return _sample_random_positions(start_pos, end_pos, budget, exclude=[], seed=seed)
@@ -430,6 +589,8 @@ def main(
     debug: bool = False,
     suffix_variant: str = _DEFAULT_SUFFIX_VARIANT,
     pool_exhaustion_warn_rate_threshold: float = 0.5,
+    filter_gt_answer: bool = False,
+    activations_pth_dir: Optional[str] = None,
 ):
     """
     suffix_variant: which forced-commitment suffix to append after
@@ -464,6 +625,22 @@ def main(
         channel-switch marker (i.e. decoded end_ids is just something like
         '<|end|>' with nothing else) -- only then does a nonzero tail make
         sense.
+    activations_pth_dir: optional path to a directory of CompressionBase-style
+        question_XXXX.pth files (the same format used by
+        compression_patching.py/compression_pooling.py: {"prompt_tokens":...,
+        "GT_answer":..., "traces": [{"tokens":..., "activations":
+        Tensor[trace_len, num_layers, hidden_dim], "entropies_hf":...}]}).
+        Only used when --skip_patched False. If provided, patching sources
+        activations from these precomputed files instead of running a live
+        forward pass (collect_residual_stream) -- useful when you already
+        have activations collected separately and want to avoid recomputing
+        them. Falls back automatically (with a printed warning) to the live
+        forward pass if: the file/trace doesn't exist, or the stored
+        trace_tokens don't match the trace_tokens from --traces_file (e.g.
+        a different generation run) -- this fallback is silent-safe by
+        design, never silently patches from mismatched activations.
+        Default None: behaves exactly as before this option existed (always
+        live forward pass when --skip_patched False).
     """
     rates = _parse_list_arg(retention_rate, cast=float)
     selectors = _parse_list_arg(selector, cast=str)
@@ -648,8 +825,20 @@ def main(
 
                 full_resid = None
                 if not skip_patched:
-                    full_ids = torch.tensor([full_ids_list], device=device)
-                    full_resid = collect_residual_stream(lm, num_layers, full_ids)
+                    if activations_pth_dir is not None:
+                        full_resid = load_precomputed_full_resid(
+                            activations_pth_dir, q_idx, t_idx, trace_tokens,
+                            prompt_len=len(prompt_tokens), num_layers=num_layers,
+                            device=device, debug=debug,
+                        )
+                    if full_resid is None:
+                        # Either --activations_pth_dir wasn't given, or the
+                        # precomputed file/trace was missing or failed
+                        # validation (see load_precomputed_full_resid) -- in
+                        # both cases fall back to the original live forward
+                        # pass, exactly as before this feature was added.
+                        full_ids = torch.tensor([full_ids_list], device=device)
+                        full_resid = collect_residual_stream(lm, num_layers, full_ids)
 
                 random_cache = {}
 
@@ -681,6 +870,10 @@ def main(
                         )
                         random_patched_correct = check_correct(suffix_text + gen_text, gt_answer)
 
+                        if debug:
+                            print(f"    [DEBUG] rate={rate:.2f}: random_PATCHED "
+                                  f"generated_answer = {gen_text!r}, correct={random_patched_correct}")
+
                     random_cache[rate] = {
                         "positions": random_positions,
                         "gen_text": random_gen_text,
@@ -695,6 +888,7 @@ def main(
                         reached_positions = select_positions(
                             sel, full_ids_list, full_entropy, start_pos, end_pos,
                             rate, tokenizer, seed=trace_seed_base,
+                            filter_out=(gt_answer if filter_gt_answer else None),
                         )
                         # INVARIANT: the compressed CoT must preserve the ORIGINAL
                         # token order, even though numbers/newlines/end_of_sentence/
@@ -758,6 +952,50 @@ def main(
                                       f"{first_pos_frac:.2%}-{last_pos_frac:.2%} of the thinking region "
                                       f"(low % = concentrated near the START, as expected for this selector)")
 
+                        if debug and reached_positions:
+                            # SHARED across ALL selectors (extended from
+                            # numbers/newlines/end_of_sentence-only per user
+                            # request), to directly compare how the same
+                            # raw-concatenation reconstruction looks for
+                            # entropy-based vs pattern-based selection on the
+                            # same trace. The model itself never "reads" this
+                            # as squashed text -- it receives raw token ID
+                            # embeddings in this order -- but the readability
+                            # (or lack thereof) of the decoded string is still
+                            # informative about how out-of-distribution the
+                            # reconstructed sequence is.
+                            individual_tokens = [tokenizer.decode([full_ids_list[p]]) for p in reached_positions]
+                            n_show = min(40, len(individual_tokens))
+                            print(f"    [DEBUG] selector={sel} rate={rate:.2f}: "
+                                  f"first {n_show} individually decoded selected tokens: "
+                                  f"{individual_tokens[:n_show]!r}")
+
+                            # Leak-risk visibility even when --filter_gt_answer is
+                            # OFF (default): how many of the selected tokens contain
+                            # the ground-truth answer substring? If this is > 0 while
+                            # filter_gt_answer=False, `reached_correct=True` results
+                            # for this selector/trace may be trivial leakage rather
+                            # than genuine compressed reasoning -- worth knowing
+                            # regardless of whether filtering is turned on.
+                            n_leak_risk = sum(
+                                1 for p in reached_positions
+                                if gt_answer in tokenizer.decode([full_ids_list[p]])
+                            )
+                            if n_leak_risk > 0:
+                                print(f"    [DEBUG]   [LEAK RISK] {n_leak_risk}/{len(reached_positions)} "
+                                      f"selected tokens literally contain gt_answer={gt_answer!r} "
+                                      f"(filter_gt_answer={filter_gt_answer})")
+
+                            # Full (untruncated) reconstructed content -- the previous
+                            # preview was capped at 300 chars, which for numbers-heavy
+                            # traces can hide most of the actual content.
+                            full_reconstructed = tokenizer.decode(
+                                [full_ids_list[p] for p in reached_positions],
+                                skip_special_tokens=True,
+                            )
+                            print(f"    [DEBUG]   FULL reconstructed content "
+                                  f"({len(full_reconstructed)} chars): {full_reconstructed!r}")
+
                         if not reached_positions:
                             if debug:
                                 print(f"    [DEBUG] selector={sel} rate={rate:.2f}: 0 positions matched -- "
@@ -778,6 +1016,10 @@ def main(
                         reached_gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
                         reached_correct = check_correct(suffix_text + reached_gen_text, gt_answer)
 
+                        if debug:
+                            print(f"    [DEBUG] selector={sel} rate={rate:.2f}: reached_only "
+                                  f"generated_answer = {reached_gen_text!r}, correct={reached_correct}")
+
                         patched_correct = None
                         if not skip_patched:
                             gen_text = generate_with_patching(
@@ -787,6 +1029,17 @@ def main(
                                 max_new_tokens=max_new_tokens,
                             )
                             patched_correct = check_correct(suffix_text + gen_text, gt_answer)
+
+                            if debug:
+                                # This was NEVER printed before -- patched_correct was
+                                # computed and saved to the output JSON, but with
+                                # --skip_patched False you had no way to see the
+                                # patched result during the run itself, only
+                                # reached_only (surface, unpatched). This is exactly
+                                # the number needed to answer "does patching save
+                                # numbers/end_of_sentence at high compression".
+                                print(f"    [DEBUG] selector={sel} rate={rate:.2f}: reached_PATCHED "
+                                      f"generated_answer = {gen_text!r}, correct={patched_correct}")
 
                         rc = random_cache[rate]
                         trace_result = {
@@ -850,10 +1103,17 @@ def main(
             print(f"  ...processed {q_idx + 1}/{len(questions)} questions")
 
     print()
-    header = (
-        f"{'selector':16s} {'rate':>6s} {'total':>6s} {'full':>7s} "
-        f"{'reached':>8s} {'random':>7s} {'no_cot':>7s} {'pool_exh':>9s}"
-    )
+    if skip_patched:
+        header = (
+            f"{'selector':16s} {'rate':>6s} {'total':>6s} {'full':>7s} "
+            f"{'reached':>8s} {'random':>7s} {'no_cot':>7s} {'pool_exh':>9s}"
+        )
+    else:
+        header = (
+            f"{'selector':16s} {'rate':>6s} {'total':>6s} {'full':>7s} "
+            f"{'reached':>8s} {'patched':>8s} {'random':>7s} {'rand_pat':>9s} "
+            f"{'no_cot':>7s} {'pool_exh':>9s}"
+        )
     print(header)
     print("-" * len(header))
 
@@ -865,11 +1125,19 @@ def main(
             return f"{s[k]}/{total}" if total else "  n/a"
 
         pool_exh_str = str(s["pool_exhausted_high_rate"]) if sel in ("numbers", "newlines", "end_of_sentence") else "-"
-        print(
-            f"{sel:16s} {rate:>6.2f} {total:>6d} "
-            f"{_pct('full_correct'):>7s} {_pct('reached_correct'):>8s} "
-            f"{_pct('random_correct'):>7s} {_pct('no_cot_correct'):>7s} {pool_exh_str:>9s}"
-        )
+        if skip_patched:
+            print(
+                f"{sel:16s} {rate:>6.2f} {total:>6d} "
+                f"{_pct('full_correct'):>7s} {_pct('reached_correct'):>8s} "
+                f"{_pct('random_correct'):>7s} {_pct('no_cot_correct'):>7s} {pool_exh_str:>9s}"
+            )
+        else:
+            print(
+                f"{sel:16s} {rate:>6.2f} {total:>6d} "
+                f"{_pct('full_correct'):>7s} {_pct('reached_correct'):>8s} "
+                f"{_pct('patched_correct'):>8s} {_pct('random_correct'):>7s} "
+                f"{_pct('random_patched_correct'):>9s} {_pct('no_cot_correct'):>7s} {pool_exh_str:>9s}"
+            )
 
         summary = {
             "total_traces": total,
@@ -901,6 +1169,7 @@ def main(
             "skip_patched": skip_patched,
             "seed": seed,
             "suffix_variant": suffix_variant,
+            "filter_gt_answer": filter_gt_answer,
             "suffix_text": _SUFFIX_VARIANTS[suffix_variant],
             "truncated_skipped": truncated_skipped,
             "results": results_questions[(sel, rate)],
