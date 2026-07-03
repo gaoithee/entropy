@@ -9,3 +9,8 @@ outputs/
 *.egg-info/
 dist/
 .venv/
+slurm_outputs/
+sweep_logs/
+*.out
+.ipynb_checkpoints/
+data/
