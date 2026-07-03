@@ -1,93 +1,24 @@
 #!/usr/bin/env python3
 """
 Evaluate token-selection strategies (inside CoT) and the no-CoT baseline
-on teacher_traces.json, mirroring evaluate_attribution.py but with
-vLLM-precomputed entropy / structural criteria instead of GIM scores,
-and no .pth/activation-collection dependency.
+on teacher_traces.json.
 
-Conditions per trace (patched ones optional via --skip_patched):
-  1. full_sequence    - prompt + start_think + full thinking + end_thinking (baseline)
-  2. reached_only     - prompt + start_think + selector-chosen thinking tokens + end_thinking
-  3. reached_patched  - same tokens, residual stream patched from full run   [skippable]
-  4. random_only      - prompt + start_think + random thinking tokens (same count) + end_thinking
-  5. random_patched   - random tokens, patched                              [skippable]
-  6. no_cot           - prompt + start_think + end_think + suffix, NO thinking content at all
+FIX 2 (this pass): full_sequence / reached_only / random_only / no_cot were
+all being truncated right after `end_ids` (the <|end|> that closes the
+"analysis" channel), with no re-opening of the "final" channel
+(<|start|>assistant<|channel|>final<|message|>) that follows it in the real
+teacher trace. Greedy-generating from that truncation point forced the model
+to *generate* the channel-switch boilerplate itself, inside the same
+max_new_tokens budget as the actual answer -- which is why retention_rate=1.0
+("keep the whole CoT") did not reproduce baseline accuracy: the model was
+being asked to do something it never had to do in the original trace.
 
-FIX (vs earlier version): full_sequence / random_only / reached_only now
-correctly include `start_ids` (the <|start|>assistant<|channel|>analysis
-<|message|> boundary) before the spliced thinking content. Previously
-`_find_thinking_boundaries` returns `t_start` already *past* start_ids
-(by construction), so the reconstructed prefix was missing the channel-
-open marker entirely -- the model was being asked to "continue" thinking
-content with no signal that it was in the analysis channel at all. This
-is now fixed in all three prefix-construction sites. `_build_no_cot` was
-already correct (it includes start_ids explicitly).
-
-Because start_ids is now prepended before the spliced/random/full token
-span, `patch_offset` passed to `generate_with_patching` must shift by
-`len(start_ids)` as well, since that's where the spliced content now
-actually starts inside the new sequence (immediately after
-prompt_tokens + start_ids, not immediately after prompt_tokens alone).
-
-SWEEP SUPPORT: --retention_rate and --selector both accept comma-separated
-lists, e.g. --retention_rate "0.01,0.05,0.1,0.5,1.0" --selector
-"low_entropy,random". All combinations run under a SINGLE model load (no
-reload between combos). Conditions that don't depend on the combo are
-computed once per trace and reused:
-    - full_sequence, no_cot, full_resid (patching source): independent of
-      both selector and retention_rate - computed once per trace.
-    - random_only, random_patched: depend on retention_rate (via budget)
-      but NOT on selector - computed once per (trace, retention_rate) and
-      reused across all selectors at that rate.
-    - reached_only, reached_patched: depend on both selector and
-      retention_rate - computed for every (selector, retention_rate) pair.
-One output JSON file is written per (selector, retention_rate) combo,
-named as before; a combined summary table is printed at the end covering
-every combo in the sweep.
-
-`--selector` values (see per-function docstrings below for what each does):
-  low_entropy, high_entropy, numbers, newlines, end_of_sentence, random
-
-`no_cot` boundaries (start_think/end_think token ids) are model-dependent and
-are resolved via entropy.models.registry.get_thinking_tokens - NOT reimplemented
-here.
-
-Usage:
-    # Single combo (original behavior)
-    python evaluate_entropy_splice.py \
-        --model openai/gpt-oss-20b \
-        --traces_file data/zebralogic/gpt-oss-20b_teacher_traces.json \
-        --retention_rate 0.1 \
-        --selector low_entropy
-
-    # Sweep: many retention rates, one selector, one model load
-    python evaluate_entropy_splice.py \
-        --model openai/gpt-oss-20b \
-        --traces_file data/aime2025/gpt-oss-20b_teacher_traces.json \
-        --retention_rate "0.01,0.02,0.05,0.10,0.15,0.20,0.25,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1.00" \
-        --selector low_entropy \
-        --max_new_tokens 150 \
-        --skip_patched True
-
-    # Sweep: many retention rates AND many selectors, one model load
-    python evaluate_entropy_splice.py \
-        --model openai/gpt-oss-20b \
-        --traces_file data/aime2025/gpt-oss-20b_teacher_traces.json \
-        --retention_rate "0.01,0.1,0.5,1.0" \
-        --selector "low_entropy,high_entropy,numbers,newlines,end_of_sentence,random" \
-        --max_new_tokens 150 \
-        --skip_patched True
-
-    # Smoke test: 1 question, 1 trace, generous max_new_tokens
-    python evaluate_entropy_splice.py \
-        --model openai/gpt-oss-20b \
-        --traces_file data/zebralogic/gpt-oss-20b_teacher_traces.json \
-        --retention_rate 0.5 \
-        --selector low_entropy \
-        --max_questions 1 \
-        --max_traces 1 \
-        --max_new_tokens 50 \
-        --skip_patched True
+Fix: every sequence-construction site now appends `tail_ids` -- the tokens
+that actually followed `end_ids` in the original trace (i.e.
+`trace_tokens[t_end:]`, the real channel-switch + any leading response
+tokens) -- via a single shared `_build_sequence` helper. This exactly
+mirrors what evaluate_attribution.py does when it uses the untouched
+`full_ids` for its baseline condition.
 """
 
 import gc
@@ -122,7 +53,6 @@ def greedy_generate(
     max_new_tokens: int = 10,
     eos_token_id: Optional[int] = None,
 ) -> List[int]:
-    """Plain greedy generation, no patching."""
     generated_tokens: List[int] = []
     past_key_values = None
     device = input_ids.device
@@ -153,7 +83,6 @@ def greedy_generate(
 
 
 def collect_residual_stream(lm: LanguageModel, num_layers: int, tokens: torch.Tensor) -> torch.Tensor:
-    """Collect residual stream (block output) at every layer. [n_layers, seq_len, d_model]."""
     layers = get_model_layers(lm)
     saves = {}
     with torch.no_grad():
@@ -182,14 +111,6 @@ def generate_with_patching(
     tokenizer,
     max_new_tokens: int = 10,
 ) -> str:
-    """Prefill with residual-stream patching at the spliced positions, then greedy-generate.
-
-    `reached_positions` are absolute positions in the FULL sequence (prompt + trace).
-    `patch_offset` is where the spliced tokens start in `short_tokens`
-    (== len(prompt_tokens) + len(start_ids), since start_ids is now always
-    prepended before the spliced/random/full thinking span -- see module
-    docstring FIX note).
-    """
     layers = get_model_layers(lm)
     n_patch = len(reached_positions)
     generated_tokens = []
@@ -230,19 +151,6 @@ def generate_with_patching(
 
 
 def load_lm(model_name: str, quantization: str | None = None, attn_implementation: str | None = "eager"):
-    """Load model + tokenizer + config via the shared entropy.core.model_loader.
-
-    NOTE: entropy.core.model_loader.load_model_and_tokenizer always uses
-    nnsight.LanguageModel for model_type="nnsight", which fails for
-    multimodal-registered models (e.g. Gemma-4, registered as
-    AutoModelForImageTextToText even when used text-only -- see traceback
-    from gemma-4-E4B-it). That bug lives in the shared loader, not here;
-    this wrapper works around it locally by swapping in VisionLanguageModel
-    when needed, but the proper fix is in core/model_loader.py so every
-    other experiment (CompressionBase included) benefits too.
-    NOT VERIFIED: whether VisionLanguageModel exposes the same
-    .trace()/.lm_head.output/.output/.layers[L].output hooks used below.
-    """
     from entropy.core.model_loader import load_model_and_tokenizer
 
     m = model_name.lower()
@@ -280,22 +188,6 @@ def load_lm(model_name: str, quantization: str | None = None, attn_implementatio
 # ---------------------------------------------------------------------------
 
 def _find_thinking_boundaries(tokens: List[int], start_ids: List[int], end_ids: List[int]):
-    """Locate the thinking region inside `tokens` (a single trace).
-
-    Note: for gpt-oss with this dataset's chat template, start_ids
-    (<|channel|>analysis<|message|>) are the *first* tokens generated by
-    the model -- i.e. they live inside trace_tokens, not prompt_tokens.
-    The returned `start_pos` is already PAST start_ids (start_pos = i + n_s),
-    i.e. it points to the first token of actual thinking CONTENT, not to
-    start_ids itself. Callers that reconstruct a prefix from
-    tokens[start_pos:end_pos] must therefore re-prepend start_ids
-    themselves if they want the channel-open marker present -- see
-    evaluate_entropy_splice.main() for where this is done.
-    end_ids may be missing if generation was truncated at max_tokens
-    before the model reached the final channel (~16% of traces on
-    Zebra Logic with max_tokens=16384) - callers should treat None as
-    "skip this trace", not retry with a fallback boundary.
-    """
     n_s = len(start_ids)
     start_pos = None
     for i in range(len(tokens) - n_s + 1):
@@ -312,14 +204,82 @@ def _find_thinking_boundaries(tokens: List[int], start_ids: List[int], end_ids: 
 
 
 # ---------------------------------------------------------------------------
-# Selection criteria ("inside CoT")
+# NEW: shared sequence builder (the actual fix)
 # ---------------------------------------------------------------------------
-# All selectors take an absolute position range [start_pos, end_pos) into the
-# *full* (prompt + trace) token/entropy arrays and return a sorted list of
-# absolute positions within that range, sized to a "budget" derived from
-# retention_rate for the entropy/random selectors, or capped at that same
-# budget (truncated, not resampled) for the categorical selectors (numbers,
-# newlines, end_of_sentence) since those can't be arbitrarily up/down-sized.
+
+def _build_sequence(
+    prompt_tokens: List[int],
+    start_ids: List[int],
+    content_ids: List[int],
+    end_ids: List[int],
+    tail_ids: List[int],
+    suffix_ids: List[int] = None,
+) -> List[int]:
+    """Build a full input sequence with the channel-switch boilerplate intact.
+
+    prompt + <|start|>...analysis<|message|> + content + <|end|> + tail + suffix
+
+    `tail_ids` is the slice of the ORIGINAL trace that followed end_ids
+    (trace_tokens[t_end:]) -- i.e. the real <|start|>assistant<|channel|>
+    final<|message|> marker (and possibly a few leading response tokens if
+    trace_offset/truncation logic ever hands us more than just the marker).
+    Without this, greedy_generate has to *generate* the channel switch
+    itself inside max_new_tokens, which silently eats the token budget
+    before the model ever gets to the actual answer -- this was the root
+    cause of retention_rate=1.0 not matching baseline accuracy.
+
+    `suffix_ids` is an engineered, dataset/experiment-chosen continuation
+    (e.g. "Therefore, the answer is \\boxed{") appended after the tail. This
+    is NOT part of the original trace -- it's a forced commitment point,
+    deliberately mirroring the pattern used in
+    attributions/nnsight_sentence_causal.py (get_answer_suffix). Its purpose
+    is methodological, not cosmetic: it prevents the model from continuing
+    to reason in the post-thinking free-generation space, which would let
+    it silently reconstruct information that was supposed to have been cut
+    by the retention_rate/selector -- defeating the point of measuring how
+    much the compressed CoT alone carries. See team discussion: this must
+    stay in place as a core part of the compression-verification setup, not
+    be swapped for a dynamic/unbounded post-thinking budget.
+    """
+    if suffix_ids is None:
+        suffix_ids = []
+    return prompt_tokens + start_ids + content_ids + end_ids + tail_ids + suffix_ids
+
+
+# ---------------------------------------------------------------------------
+# Answer-suffix variants ("outside CoT" forced commitment point)
+# ---------------------------------------------------------------------------
+# All variants force the model to commit to an answer immediately after
+# end_thinking (+ tail), instead of letting it keep reasoning in free-form
+# text. This is intentional: it's what makes the retention_rate/selector
+# experiment actually measure what survives INSIDE the (possibly
+# compressed) thinking region, rather than measuring "can the model
+# re-derive everything anyway if given enough tokens after the cut".
+# Default is 'therefore_boxed' -- do not change the default without team
+# agreement (see chat discussion 2026-07-03).
+
+_SUFFIX_VARIANTS = {
+    "therefore_boxed": "\n\nTherefore, the answer is \\boxed{",
+    "boxed_only": "\n\n\\boxed{",
+    "based_only_on_above": "\n\nBased only on the above, the best answer I can determine is \\boxed{",
+    "one_sentence_boxed": "\n\nGiven the reasoning above, in one sentence, the answer is \\boxed{",
+}
+
+_DEFAULT_SUFFIX_VARIANT = "therefore_boxed"
+
+
+def _resolve_suffix_ids(tokenizer, suffix_variant: str) -> List[int]:
+    if suffix_variant not in _SUFFIX_VARIANTS:
+        raise ValueError(
+            f"--suffix_variant must be one of {sorted(_SUFFIX_VARIANTS)}, got {suffix_variant!r}"
+        )
+    suffix_text = _SUFFIX_VARIANTS[suffix_variant]
+    return tokenizer.encode(suffix_text, add_special_tokens=False)
+
+
+# ---------------------------------------------------------------------------
+# Selection criteria ("inside CoT") -- unchanged from before
+# ---------------------------------------------------------------------------
 
 def _budget(start_pos: int, end_pos: int, retention_rate: float) -> int:
     thinking_len = end_pos - start_pos
@@ -327,37 +287,14 @@ def _budget(start_pos: int, end_pos: int, retention_rate: float) -> int:
     return max(1, min(raw, thinking_len))
 
 
-def _reached_from_entropy(
-    entropies: List[float], start_pos: int, end_pos: int,
-    retention_rate: float, mode: str,
-) -> List[int]:
-    """Select positions within [start_pos, end_pos) by entropy, sorted ascending.
-
-    mode: 'low' (lowest-entropy / most confident tokens) or
-          'high' (highest-entropy / most surprising tokens)
-    """
+def _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, mode):
     num_peaks = _budget(start_pos, end_pos, retention_rate)
     indexed = [(entropies[i], i) for i in range(start_pos, end_pos)]
     indexed.sort(key=lambda x: x[0], reverse=(mode == "high"))
     return sorted(i for _, i in indexed[:num_peaks])
 
 
-def _reached_numbers_only(
-    tokens: List[int], start_pos: int, end_pos: int,
-    tokenizer, retention_rate: float,
-) -> List[int]:
-    """Positions whose decoded text is purely numeric (digits, optional sign/
-    decimal separators, tolerant of a leading tokenizer space, e.g. ' 12', '3',
-    '0.5', '1,000').
-
-    CAUTION (byte-level BPE): a multi-digit number can be split across several
-    tokens (e.g. "1234" -> "12" + "34"), and whether a token carries a leading
-    space depends on what preceded it. This decodes each token in isolation,
-    so it will miss numeric *fragments* that don't independently look numeric
-    once decoded -- good enough as a first pass, but not a fully faithful
-    "is this token part of a number" detector. If that matters, switch to a
-    cumulative-text + char-offset remap like `_reached_end_of_sentence_only`.
-    """
+def _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0):
     budget = _budget(start_pos, end_pos, retention_rate)
     pattern = re.compile(r"\s*[+-]?\d[\d.,]*\s*$")
     matched = [
@@ -365,38 +302,30 @@ def _reached_numbers_only(
         if pattern.fullmatch(tokenizer.decode([tokens[i]]))
     ]
     if len(matched) > budget:
-        matched = matched[:budget]
+        # Random subsample among the matches, not the first `budget` in
+        # position order -- taking the first N systematically concentrated
+        # selections near the START of the thinking region (since matched
+        # is already position-sorted), ignoring any numbers/newlines/
+        # sentence-ends later in the CoT regardless of how informative they
+        # were. Random sampling preserves the pattern's natural spread.
+        rng = random.Random(seed)
+        matched = sorted(rng.sample(matched, budget))
     return matched
 
 
-def _reached_newlines_only(
-    tokens: List[int], start_pos: int, end_pos: int,
-    tokenizer, retention_rate: float,
-) -> List[int]:
-    """Positions whose decoded text contains a newline character."""
+def _reached_newlines_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0):
     budget = _budget(start_pos, end_pos, retention_rate)
     matched = [
         i for i in range(start_pos, end_pos)
         if "\n" in tokenizer.decode([tokens[i]])
     ]
     if len(matched) > budget:
-        matched = matched[:budget]
+        rng = random.Random(seed)
+        matched = sorted(rng.sample(matched, budget))
     return matched
 
 
-def _reached_end_of_sentence_only(
-    tokens: List[int], start_pos: int, end_pos: int,
-    tokenizer, retention_rate: float,
-) -> List[int]:
-    """Positions at sentence-ending punctuation boundaries ('. ', '.\\n', '? ',
-    '! '), scanning the whole thinking region (not just the last sentence --
-    contrast with evaluate_attribution.py's _find_last_sentence_start, which
-    only locates ONE boundary near the end for post-hoc filtering).
-
-    Uses a cumulative-text + char-offset remap (rather than isolated
-    per-token decode) so multi-token punctuation sequences are handled
-    correctly regardless of tokenizer boundary quirks.
-    """
+def _reached_end_of_sentence_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0):
     budget = _budget(start_pos, end_pos, retention_rate)
 
     ids_region = tokens[start_pos:end_pos]
@@ -419,7 +348,8 @@ def _reached_end_of_sentence_only(
 
     matched = sorted(set(matched))
     if len(matched) > budget:
-        matched = matched[:budget]
+        rng = random.Random(seed)
+        matched = sorted(rng.sample(matched, budget))
     return matched
 
 
@@ -434,27 +364,17 @@ def _sample_random_positions(lo: int, hi: int, n_sample: int, exclude: List[int]
 _VALID_SELECTORS = ("low_entropy", "high_entropy", "numbers", "newlines", "end_of_sentence", "random")
 
 
-def select_positions(
-    selector: str,
-    tokens: List[int],
-    entropies: List[float],
-    start_pos: int,
-    end_pos: int,
-    retention_rate: float,
-    tokenizer,
-    seed: int,
-) -> List[int]:
-    """Dispatch to the right selection criterion. Returns sorted absolute positions."""
+def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_rate, tokenizer, seed):
     if selector == "low_entropy":
         return _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, "low")
     elif selector == "high_entropy":
         return _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, "high")
     elif selector == "numbers":
-        return _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate)
+        return _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed)
     elif selector == "newlines":
-        return _reached_newlines_only(tokens, start_pos, end_pos, tokenizer, retention_rate)
+        return _reached_newlines_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed)
     elif selector == "end_of_sentence":
-        return _reached_end_of_sentence_only(tokens, start_pos, end_pos, tokenizer, retention_rate)
+        return _reached_end_of_sentence_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=seed)
     elif selector == "random":
         budget = _budget(start_pos, end_pos, retention_rate)
         return _sample_random_positions(start_pos, end_pos, budget, exclude=[], seed=seed)
@@ -463,20 +383,20 @@ def select_positions(
 
 
 # ---------------------------------------------------------------------------
-# No-CoT baseline ("outside CoT")
+# No-CoT baseline ("outside CoT") -- FIXED to include tail_ids
 # ---------------------------------------------------------------------------
 
-def _build_no_cot(prompt_tokens: List[int], start_ids: List[int], end_ids: List[int]) -> List[int]:
-    """prompt + start_think + end_think + suffix -- zero thinking content.
+def _build_no_cot(
+    prompt_tokens: List[int],
+    start_ids: List[int],
+    end_ids: List[int],
+    tail_ids: List[int],
+    suffix_ids: List[int] = None,
+) -> List[int]:
+    """prompt + start_think + end_think + tail (channel switch) + suffix -- zero thinking content."""
+    return _build_sequence(prompt_tokens, start_ids, [], end_ids, tail_ids, suffix_ids)
 
-    start_ids/end_ids are resolved by the caller via
-    entropy.models.registry.get_thinking_tokens (model-dependent), NOT
-    reimplemented here.
-    """
-    return prompt_tokens + start_ids + end_ids
 
-
-# Column widths for aligned output
 _COL_TRACE = 10
 _COL_INFO = 48
 
@@ -486,7 +406,6 @@ def _fmt_bool(v: bool) -> str:
 
 
 def _parse_list_arg(value, cast=float) -> List:
-    """Accept either a single value or a comma-separated string; return a list."""
     if isinstance(value, (list, tuple)):
         return [cast(v) for v in value]
     s = str(value)
@@ -507,18 +426,44 @@ def main(
     trace_offset: int = 0,
     question_offset: int = 0,
     skip_patched: bool = False,
+    tail_len: int = 0,
+    debug: bool = False,
+    suffix_variant: str = _DEFAULT_SUFFIX_VARIANT,
+    pool_exhaustion_warn_rate_threshold: float = 0.5,
 ):
-    """Evaluate one or more token-selection criteria against full-CoT, random,
-    and no-CoT baselines, across one or more retention rates -- all under a
-    SINGLE model load.
-
-    Args:
-        retention_rate: float, or comma-separated string of floats (e.g.
-            "0.01,0.05,0.1,0.5,1.0") to sweep multiple retention rates in
-            one process without reloading the model.
-        selector: one of _VALID_SELECTORS, or a comma-separated string of
-            several (e.g. "low_entropy,random") to sweep multiple selectors
-            in one process. See module docstring for what each does.
+    """
+    suffix_variant: which forced-commitment suffix to append after
+        end_thinking (+ tail), before letting the model generate its
+        answer. One of: therefore_boxed, boxed_only, based_only_on_above,
+        one_sentence_boxed (see _SUFFIX_VARIANTS for exact text). Default is
+        'therefore_boxed' -- keep this as the default; it's a deliberate
+        methodological choice (forces the model to answer using only what
+        survived inside the thinking region, instead of letting it keep
+        reasoning in the post-thinking free-generation space and silently
+        reconstruct information that retention_rate/selector were supposed
+        to have cut). See _SUFFIX_VARIANTS for the other options, meant for
+        ablation, not for casual switching.
+    tail_len: IMPORTANT -- for gpt-oss (and likely other harmony-format
+        models), `end_ids` returned by entropy.models.registry.get_thinking_tokens
+        already bundles the FULL channel-switch marker, e.g.
+        '<|end|><|start|>assistant<|channel|>final<|message|>' as a single
+        end_ids sequence -- confirmed via --debug: decoding end_ids for
+        openai/gpt-oss-20b shows exactly this. That means the original
+        `... + end_ids` construction (without any tail) was ALREADY correct
+        for this model: no extra tail is needed, since end_ids itself puts
+        the model right at the start of the "final" channel, ready to
+        generate the answer.
+        Appending a tail on top of that (tail_len > 0) grabs tokens that
+        come AFTER end_ids in the original trace -- which at that point is
+        the actual answer content (e.g. '\\boxed{basketball}<|return|>').
+        That leaks the answer into the model's input, so it immediately
+        emits EOS and generates 0 tokens -- exactly the empty-generation bug
+        seen when tail_len=8 was used as default.
+        Keep tail_len=0 unless you've verified via --debug that, for your
+        specific model/registry config, end_ids does NOT already include a
+        channel-switch marker (i.e. decoded end_ids is just something like
+        '<|end|>' with nothing else) -- only then does a nonzero tail make
+        sense.
     """
     rates = _parse_list_arg(retention_rate, cast=float)
     selectors = _parse_list_arg(selector, cast=str)
@@ -548,29 +493,28 @@ def main(
         thinking_cfg["end_token"], add_special_tokens=False
     )
 
+    suffix_ids = _resolve_suffix_ids(tokenizer, suffix_variant)
+    suffix_text = _SUFFIX_VARIANTS[suffix_variant]
+    print(f"Suffix variant: {suffix_variant!r} -> {suffix_text!r} "
+          f"({len(suffix_ids)} tokens)")
+
     num_layers = config["num_hidden_layers"]
     print(f"Model: {num_layers} layers")
     print(f"Sweep: {len(selectors)} selector(s) x {len(rates)} retention_rate(s) "
           f"= {len(selectors) * len(rates)} combo(s). skip_patched={skip_patched}")
 
-    # results_questions[(selector, rate)] -> list of per-question dicts
     combo_keys = [(sel, r) for sel in selectors for r in rates]
     results_questions = {k: [] for k in combo_keys}
     stats = {
         k: {
             "full_correct": 0, "reached_correct": 0, "patched_correct": 0,
             "random_correct": 0, "random_patched_correct": 0, "no_cot_correct": 0,
-            "total": 0,
+            "total": 0, "pool_exhausted_high_rate": 0,
         }
         for k in combo_keys
     }
     truncated_skipped = 0
 
-    # start_ids is now always prepended before any spliced/random/full
-    # thinking span (see FIX note in module docstring), so the offset at
-    # which the spliced span actually begins inside the reconstructed
-    # sequence is len(prompt_tokens) + len(start_ids), not just
-    # len(prompt_tokens). Used for residual-stream patching alignment.
     patch_base_offset_extra = len(start_ids)
 
     for q_idx, q in enumerate(questions):
@@ -591,7 +535,7 @@ def main(
             zip(traces_tokens, traces_entropy, extracted_answers)
         ):
             if max_traces is not None and n_good_traces_this_question >= max_traces:
-                break  # already have enough good traces for this question
+                break
 
             full_ids_list = prompt_tokens + trace_tokens
             full_entropy = [0.0] * len(prompt_tokens) + list(trace_entropy)
@@ -603,10 +547,6 @@ def main(
                 truncated_skipped += 1
                 continue
 
-            # Pre-filter: original trace had no \boxed{} extracted at generation
-            # time -> skip without counting against max_traces (mirrors the
-            # 'truncated'/'no_boxed' pathology categories from
-            # reevaluate_trace_correct.py / find_good_trace.py).
             if orig_extracted is not None and not str(orig_extracted).strip():
                 print(f"  Q{q_idx} Trace {t_idx}: original extracted_answers empty (no boxed), "
                       f"skipping (does not count toward budget)")
@@ -616,50 +556,120 @@ def main(
             start_pos = len(prompt_tokens) + t_start
             end_pos = len(prompt_tokens) + t_end
 
+            # NEW: real continuation from the trace, right after end_thinking.
+            # This is the channel-switch marker (+ maybe a few leading answer
+            # tokens) that was previously being dropped.
+            # NOTE: t_end is the position where end_ids *begins* (see
+            # _find_thinking_boundaries), so we must skip past end_ids itself
+            # before slicing the tail -- otherwise end_ids gets duplicated
+            # (once from _build_sequence's own `+ end_ids`, once again here).
+            tail_start = t_end + len(end_ids)
+            tail_ids = trace_tokens[tail_start:tail_start + tail_len] if tail_len > 0 else []
+
+            teacher_answer_len = len(trace_tokens) - tail_start
+
+            if tail_len > 0 and debug:
+                decoded_end = tokenizer.decode(end_ids)
+                if "<|message|>" in decoded_end or "channel" in decoded_end:
+                    print(f"    [DEBUG] WARNING: end_ids already decodes to a full channel-switch "
+                          f"({decoded_end!r}) -- a nonzero tail_len={tail_len} will likely leak the "
+                          f"real answer content into the input. Consider --tail_len 0.")
+
+            if debug:
+                print(f"    [DEBUG] gt_answer = {gt_answer!r}")
+                print(f"    [DEBUG] orig_extracted (teacher's own answer at gen time) = {orig_extracted!r}")
+                print(f"    [DEBUG] len(trace_tokens) = {len(trace_tokens)}, t_start={t_start}, t_end={t_end}")
+                print(f"    [DEBUG] start_ids = {start_ids} -> decoded: {tokenizer.decode(start_ids)!r}")
+                print(f"    [DEBUG] end_ids   = {end_ids} -> decoded: {tokenizer.decode(end_ids)!r}")
+                print(f"    [DEBUG] tail_ids ({len(tail_ids)} tokens) = {tail_ids}")
+                print(f"    [DEBUG] tail_ids decoded: {tokenizer.decode(tail_ids)!r}")
+                print(f"    [DEBUG] teacher's own answer took {teacher_answer_len} tokens "
+                      f"(from end of thinking to end of trace) -- "
+                      f"max_new_tokens={max_new_tokens} is "
+                      f"{'SUFFICIENT' if max_new_tokens >= teacher_answer_len else 'LIKELY TOO LOW'} "
+                      f"for this trace")
+                # sanity: cosa c'era DAVVERO nel trace originale subito dopo end_ids,
+                # con una finestra più larga di tail_len, per capire se tail_len basta
+                wide_tail = trace_tokens[tail_start:tail_start + 30]
+                print(f"    [DEBUG] wide window (30 tok) after end_ids, decoded: "
+                      f"{tokenizer.decode(wide_tail)!r}")
+
             trace_seed_base = seed + q_idx * 1000 + t_idx
             print(f"  Q{q_idx} T{t_idx}: {end_pos - start_pos} thinking tokens, starting generations... "
                   f"({n_good_traces_this_question}/{max_traces if max_traces is not None else '?'} "
                   f"good traces so far for this question)")
 
             try:
-                # ---- Conditions independent of (selector, rate): compute ONCE per trace ----
-                # NOTE: start_ids prepended here -- FIX, see module docstring.
+                # ---- Conditions independent of (selector, rate) ----
                 full_seq_ids = torch.tensor(
-                    [prompt_tokens + start_ids + trace_tokens[t_start:t_end] + end_ids], device=device
+                    [_build_sequence(prompt_tokens, start_ids, trace_tokens[t_start:t_end], end_ids, tail_ids, suffix_ids)],
+                    device=device,
                 )
                 gen_ids = greedy_generate(lm, full_seq_ids, max_new_tokens=max_new_tokens,
                                            eos_token_id=tokenizer.eos_token_id)
                 full_gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-                full_correct = check_correct(full_gen_text, gt_answer)
+                full_correct = check_correct(suffix_text + full_gen_text, gt_answer)
 
-                no_cot_ids = torch.tensor([_build_no_cot(prompt_tokens, start_ids, end_ids)], device=device)
+                # UNIVERSAL sanity check (not gated by --debug): an empty
+                # generation on the full_sequence condition -- especially at
+                # retention_rate=1.0 -- is the exact symptom of the
+                # answer-leaked-into-input bug found on gpt-oss-20b (end_ids
+                # already containing the full channel-switch marker, plus a
+                # nonzero tail duplicating the real answer into the prompt).
+                # Different models (Qwen3, Gemma-4) may structure end_ids
+                # differently, so re-check this on every new model/config.
+                if len(gen_ids) == 0:
+                    print(f"  Q{q_idx} T{t_idx}: [WARNING] full_sequence generated 0 tokens "
+                          f"(immediate EOS) -- likely the answer is already leaked into the "
+                          f"input via end_ids/tail_ids for this model. Run with --debug True "
+                          f"and check 'wide window after end_ids' vs 'end_ids decoded'.")
+
+                if debug:
+                    print(f"    [DEBUG] full_sequence n_input_tokens = {full_seq_ids.shape[1]}, "
+                          f"n_generated = {len(gen_ids)} (max_new_tokens={max_new_tokens})")
+                    print(f"    [DEBUG] full_sequence gen_ids (raw, incl special) = {gen_ids}")
+                    print(f"    [DEBUG] full_sequence generated_answer = {full_gen_text!r}")
+                    print(f"    [DEBUG] full_sequence correct = {full_correct}  "
+                          f"(checking against suffix_text + generated = {suffix_text + full_gen_text!r})")
+                    if len(gen_ids) == max_new_tokens:
+                        print(f"    [DEBUG] WARNING: hit max_new_tokens budget without EOS -- "
+                              f"answer may be truncated before completion, try raising max_new_tokens")
+
+                no_cot_ids = torch.tensor(
+                    [_build_no_cot(prompt_tokens, start_ids, end_ids, tail_ids, suffix_ids)], device=device
+                )
                 gen_ids = greedy_generate(lm, no_cot_ids, max_new_tokens=max_new_tokens,
                                            eos_token_id=tokenizer.eos_token_id)
                 no_cot_gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-                no_cot_correct = check_correct(no_cot_gen_text, gt_answer)
+                no_cot_correct = check_correct(suffix_text + no_cot_gen_text, gt_answer)
+
+                if debug:
+                    print(f"    [DEBUG] no_cot generated_answer = {no_cot_gen_text!r}, correct={no_cot_correct}")
 
                 full_resid = None
                 if not skip_patched:
                     full_ids = torch.tensor([full_ids_list], device=device)
                     full_resid = collect_residual_stream(lm, num_layers, full_ids)
 
-                # ---- Conditions independent of selector, cached per rate ----
-                random_cache = {}  # rate -> (random_positions, random_correct, random_patched_correct)
+                random_cache = {}
 
                 for rate in rates:
                     budget = _budget(start_pos, end_pos, rate)
                     random_positions = _sample_random_positions(
                         start_pos, end_pos, budget, exclude=[], seed=trace_seed_base,
                     )
-                    # NOTE: start_ids prepended here -- FIX, see module docstring.
                     random_ids = torch.tensor(
-                        [prompt_tokens + start_ids + [full_ids_list[p] for p in random_positions] + end_ids],
+                        [_build_sequence(
+                            prompt_tokens, start_ids,
+                            [full_ids_list[p] for p in random_positions],
+                            end_ids, tail_ids, suffix_ids,
+                        )],
                         device=device,
                     )
                     gen_ids = greedy_generate(lm, random_ids, max_new_tokens=max_new_tokens,
                                                eos_token_id=tokenizer.eos_token_id)
                     random_gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-                    random_correct = check_correct(random_gen_text, gt_answer)
+                    random_correct = check_correct(suffix_text + random_gen_text, gt_answer)
 
                     random_patched_correct = None
                     if not skip_patched:
@@ -669,7 +679,7 @@ def main(
                             tokenizer=tokenizer,
                             max_new_tokens=max_new_tokens,
                         )
-                        random_patched_correct = check_correct(gen_text, gt_answer)
+                        random_patched_correct = check_correct(suffix_text + gen_text, gt_answer)
 
                     random_cache[rate] = {
                         "positions": random_positions,
@@ -678,26 +688,95 @@ def main(
                         "patched_correct": random_patched_correct,
                     }
 
-                # ---- Conditions depending on (selector, rate) ----
                 for sel in selectors:
                     for rate in rates:
                         key = (sel, rate)
+                        budget_for_sel = _budget(start_pos, end_pos, rate)
                         reached_positions = select_positions(
                             sel, full_ids_list, full_entropy, start_pos, end_pos,
                             rate, tokenizer, seed=trace_seed_base,
                         )
+                        # INVARIANT: the compressed CoT must preserve the ORIGINAL
+                        # token order, even though numbers/newlines/end_of_sentence/
+                        # random now sample randomly WITHIN their candidate pool.
+                        # Randomness applies to WHICH positions are kept, never to
+                        # the order they're stitched back together in -- shuffling
+                        # would turn "compressed CoT" into "scrambled token bag",
+                        # which is a different (and much weirder) experiment.
+                        assert reached_positions == sorted(reached_positions), (
+                            f"selector={sel} returned out-of-order positions: "
+                            f"{reached_positions} -- the reconstructed CoT would not "
+                            f"preserve original token order"
+                        )
+
+                        # UNCONDITIONAL (not gated by --debug) warning: pool
+                        # exhaustion at a HIGH nominal retention_rate is the
+                        # most misleading case -- it silently produces a
+                        # selector that looks "rate-independent" in the
+                        # summary table (identical results at e.g. rate=0.5
+                        # and rate=1.0), which is easy to misread as "this
+                        # selector doesn't benefit from more budget" instead
+                        # of what it actually is: "this trace simply doesn't
+                        # have enough numbers/newlines/sentence-ends to fill
+                        # even a 50%+ budget". Counted into the final summary
+                        # table (see pool_exhausted_high_rate column) so it's
+                        # visible without re-running with --debug.
+                        if (
+                            sel in ("numbers", "newlines", "end_of_sentence")
+                            and rate >= pool_exhaustion_warn_rate_threshold
+                            and len(reached_positions) < budget_for_sel
+                        ):
+                            stats[key]["pool_exhausted_high_rate"] += 1
+                            print(
+                                f"  Q{q_idx} T{t_idx}: [WARNING] selector={sel} rate={rate:.2f} "
+                                f"(>= {pool_exhaustion_warn_rate_threshold:.2f} threshold): "
+                                f"pool exhausted -- only {len(reached_positions)}/{budget_for_sel} "
+                                f"tokens available, not the nominal budget. This selector's "
+                                f"'retention_rate' does not reflect actual compression for this "
+                                f"trace; use n_tokens_reached/n_tokens_thinking instead."
+                            )
+
+                        if debug and sel in ("numbers", "newlines", "end_of_sentence"):
+                            # These are pattern-based selectors: unlike low_entropy/random,
+                            # they take the FIRST budget-many matches in position order
+                            # (see _reached_*_only truncation logic), so at low
+                            # retention_rate they systematically sample only from the
+                            # START of the thinking region -- never from the middle/end,
+                            # regardless of where the informative content actually is.
+                            # Also, matched count can fall short of budget entirely if the
+                            # trace has few numbers/newlines/sentence-ends, which silently
+                            # `continue`s (skips this trace for this combo) below --
+                            # making `total` in the final summary NOT directly comparable
+                            # across selectors on the same sweep.
+                            print(f"    [DEBUG] selector={sel} rate={rate:.2f}: "
+                                  f"budget={budget_for_sel}, matched={len(reached_positions)} "
+                                  f"({'FULL' if len(reached_positions) >= budget_for_sel else 'UNDER budget -- trace may be skipped below'})")
+                            if reached_positions:
+                                first_pos_frac = (reached_positions[0] - start_pos) / max(1, end_pos - start_pos)
+                                last_pos_frac = (reached_positions[-1] - start_pos) / max(1, end_pos - start_pos)
+                                print(f"    [DEBUG]   selected positions span "
+                                      f"{first_pos_frac:.2%}-{last_pos_frac:.2%} of the thinking region "
+                                      f"(low % = concentrated near the START, as expected for this selector)")
+
                         if not reached_positions:
+                            if debug:
+                                print(f"    [DEBUG] selector={sel} rate={rate:.2f}: 0 positions matched -- "
+                                      f"SKIPPING this trace for this combo (won't count toward 'total' "
+                                      f"in the summary, unlike low_entropy/random which always match)")
                             continue
 
-                        # NOTE: start_ids prepended here -- FIX, see module docstring.
                         short_ids = torch.tensor(
-                            [prompt_tokens + start_ids + [full_ids_list[p] for p in reached_positions] + end_ids],
+                            [_build_sequence(
+                                prompt_tokens, start_ids,
+                                [full_ids_list[p] for p in reached_positions],
+                                end_ids, tail_ids, suffix_ids,
+                            )],
                             device=device,
                         )
                         gen_ids = greedy_generate(lm, short_ids, max_new_tokens=max_new_tokens,
                                                    eos_token_id=tokenizer.eos_token_id)
                         reached_gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-                        reached_correct = check_correct(reached_gen_text, gt_answer)
+                        reached_correct = check_correct(suffix_text + reached_gen_text, gt_answer)
 
                         patched_correct = None
                         if not skip_patched:
@@ -707,7 +786,7 @@ def main(
                                 tokenizer=tokenizer,
                                 max_new_tokens=max_new_tokens,
                             )
-                            patched_correct = check_correct(gen_text, gt_answer)
+                            patched_correct = check_correct(suffix_text + gen_text, gt_answer)
 
                         rc = random_cache[rate]
                         trace_result = {
@@ -770,11 +849,10 @@ def main(
         if (q_idx + 1) % 5 == 0 or q_idx == len(questions) - 1:
             print(f"  ...processed {q_idx + 1}/{len(questions)} questions")
 
-    # ---- Write one output file per combo, print combined summary ----
     print()
     header = (
         f"{'selector':16s} {'rate':>6s} {'total':>6s} {'full':>7s} "
-        f"{'reached':>8s} {'random':>7s} {'no_cot':>7s}"
+        f"{'reached':>8s} {'random':>7s} {'no_cot':>7s} {'pool_exh':>9s}"
     )
     print(header)
     print("-" * len(header))
@@ -786,10 +864,11 @@ def main(
         def _pct(k):
             return f"{s[k]}/{total}" if total else "  n/a"
 
+        pool_exh_str = str(s["pool_exhausted_high_rate"]) if sel in ("numbers", "newlines", "end_of_sentence") else "-"
         print(
             f"{sel:16s} {rate:>6.2f} {total:>6d} "
             f"{_pct('full_correct'):>7s} {_pct('reached_correct'):>8s} "
-            f"{_pct('random_correct'):>7s} {_pct('no_cot_correct'):>7s}"
+            f"{_pct('random_correct'):>7s} {_pct('no_cot_correct'):>7s} {pool_exh_str:>9s}"
         )
 
         summary = {
@@ -798,6 +877,8 @@ def main(
             "reached_only_accuracy": s["reached_correct"] / total if total else 0,
             "random_only_accuracy": s["random_correct"] / total if total else 0,
             "no_cot_accuracy": s["no_cot_correct"] / total if total else 0,
+            "pool_exhausted_high_rate_count": s["pool_exhausted_high_rate"],
+            "pool_exhaustion_warn_rate_threshold": pool_exhaustion_warn_rate_threshold,
         }
         if not skip_patched:
             summary["reached_patched_accuracy"] = s["patched_correct"] / total if total else 0
@@ -819,6 +900,8 @@ def main(
             "retention_rate": rate,
             "skip_patched": skip_patched,
             "seed": seed,
+            "suffix_variant": suffix_variant,
+            "suffix_text": _SUFFIX_VARIANTS[suffix_variant],
             "truncated_skipped": truncated_skipped,
             "results": results_questions[(sel, rate)],
             "summary": summary,

@@ -128,3 +128,17 @@ Resuming: 128 already processed.
 
 Processed prompts:   0%|          | 0/96 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s][A
 Processed prompts:  17%|█▋        | 16/96 [03:03<15:17, 11.47s/it, est. speed input: 14.21 toks/s, output: 271.84 toks/s][A
+Processed prompts:  33%|███▎      | 32/96 [05:25<10:35,  9.93s/it, est. speed input: 14.86 toks/s, output: 425.68 toks/s][A
+Processed prompts:  50%|█████     | 48/96 [06:04<05:12,  6.52s/it, est. speed input: 25.33 toks/s, output: 674.96 toks/s][A
+Processed prompts:  67%|██████▋   | 64/96 [06:14<02:13,  4.18s/it, est. speed input: 30.53 toks/s, output: 988.84 toks/s][A
+Processed prompts:  83%|████████▎ | 80/96 [07:22<01:07,  4.21s/it, est. speed input: 32.35 toks/s, output: 1186.92 toks/s][A
+Processed prompts: 100%|██████████| 96/96 [07:24<00:00,  2.82s/it, est. speed input: 39.37 toks/s, output: 1545.16 toks/s][A
+Processed prompts: 100%|██████████| 96/96 [07:24<00:00,  2.82s/it, est. speed input: 39.37 toks/s, output: 1545.16 toks/s][AProcessed prompts: 100%|██████████| 96/96 [07:24<00:00,  4.63s/it, est. speed input: 39.37 toks/s, output: 1545.16 toks/s]
+Batches: 100%|██████████| 2/2 [1:58:00<00:00, 3020.85s/it]  Batches: 100%|██████████| 2/2 [1:58:00<00:00, 3540.47s/it]
+(EngineCore pid=26206) INFO 07-02 19:03:44 [core.py:1178] [shutdown] EngineCore: trigger received signal=SIGTERM
+(EngineCore pid=26206) INFO 07-02 19:03:44 [core.py:1297] [shutdown] EngineCore: start mode=abort timeout=0s
+(EngineCore pid=26206) INFO 07-02 19:03:44 [core.py:1328] [shutdown] EngineCore: request processing complete; starting resource teardown
+(EngineCore pid=26206) INFO 07-02 19:03:44 [core.py:1191] [shutdown] EngineCore: exiting busy loop
+Batch done. Total: 198
+
+Done! Saved to data/gpqa/Qwen3-4B_teacher_traces.json
