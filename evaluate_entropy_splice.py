@@ -386,10 +386,27 @@ def generate_with_patching(
     return tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
 
-def load_lm(model_name: str, quantization: str | None = None, attn_implementation: str | None = "eager"):
+def load_lm(model_name: str, quantization: str | None = None, attn_implementation: str | None = None):
     from entropy.core.model_loader import load_model_and_tokenizer
 
     m = model_name.lower()
+
+    # Auto-select attention implementation per model family when not explicitly
+    # given. Rationale (verified empirically on A100/Leonardo, see README):
+    #   - gpt-oss: uses attention sinks, which SDPA cannot expose (no access to
+    #     pre-softmax logits). The only flash-attn variant that supports sinks
+    #     (vllm-flash-attn3) requires Hopper GPUs, unavailable here -> eager.
+    #   - everything else: SDPA cuts OOM rate drastically on long traces vs
+    #     eager's O(seq_len^2) memory growth, with no known correctness issue
+    #     for this codebase (only collects layer *outputs*, never attention
+    #     weights). Passing --attn_implementation explicitly always overrides
+    #     this default, e.g. for debugging or one-off comparisons.
+    if attn_implementation is None:
+        attn_implementation = "eager" if "gpt-oss" in m else "sdpa"
+        print(f"[attn] auto-selected attn_implementation={attn_implementation!r} for {model_name}")
+    else:
+        print(f"[attn] using explicit attn_implementation={attn_implementation!r} for {model_name}")
+
     if "gemma-4" in m or "gemma4" in m:
         from transformers import AutoTokenizer
         from nnsight import VisionLanguageModel
@@ -714,7 +731,7 @@ def main(
     filter_gt_answer: bool = False,
     activations_pth_dir: Optional[str] = None,
     patch_layers: Optional[str] = None,
-    attn_implementation: Optional[str] = "eager",
+    attn_implementation: Optional[str] = None,
 ):
     """
     suffix_variant: which forced-commitment suffix to append after
