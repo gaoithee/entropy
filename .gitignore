@@ -14,3 +14,4 @@ sweep_logs/
 *.out
 .ipynb_checkpoints/
 data/
+data
