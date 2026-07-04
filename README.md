@@ -6,7 +6,7 @@ Demistifying entropy-related token selection for CoT compression in reasoning LL
 
 ```bash
 cd entropy
-uv venv .venv --python 3.10
+uv venv .venv
 source .venv/bin/activate
 uv pip install -e .
 ```
