@@ -17,6 +17,8 @@ dependencies = [
     "tqdm>=4.68",
     "numpy>=2.0",
     "pyyaml>=6.0",
+    "pillow>=11.0",
+    "torchvision==0.24.0",
     "accelerate>=1.14",
     "huggingface-hub>=1.21",
     "safetensors>=0.8",

@@ -40,6 +40,12 @@ def get_model_layers(lm: LanguageModel):
     m = lm
     if hasattr(m, "model") and hasattr(m.model, "layers"):
         return m.model.layers
+    if (
+        hasattr(m, "model")
+        and hasattr(m.model, "language_model")
+        and hasattr(m.model.language_model, "layers")
+    ):
+        return m.model.language_model.layers
     if hasattr(m, "transformer") and hasattr(m.transformer, "h"):
         return m.transformer.h
     if hasattr(m, "gpt_neox") and hasattr(m.gpt_neox, "layers"):
@@ -169,7 +175,10 @@ def collect_residual_stream(
         val = saves[L]
         if val.dim() == 2:
             val = val.unsqueeze(0)
-        out.append(val[0])
+        val = val[0]
+        if out and val.device != out[0].device:
+            val = val.to(out[0].device)
+        out.append(val)
     return torch.stack(out, dim=0)
 
 
@@ -353,7 +362,7 @@ def generate_with_patching(
                         for i in range(n_patch):
                             new_pos = patch_offset + i
                             orig_pos = reached_positions[i]
-                            hidden[:, new_pos, :] = full_resid[local_idx, orig_pos, :]
+                            hidden[:, new_pos, :] = full_resid[local_idx, orig_pos, :].to(hidden.device)
                     logits = lm.lm_head.output.save()
                     cache_output = lm.output.save()
             past_key_values = cache_output.past_key_values
@@ -705,6 +714,7 @@ def main(
     filter_gt_answer: bool = False,
     activations_pth_dir: Optional[str] = None,
     patch_layers: Optional[str] = None,
+    attn_implementation: Optional[str] = "eager",
 ):
     """
     suffix_variant: which forced-commitment suffix to append after
@@ -786,7 +796,7 @@ def main(
         questions = questions[:max_questions]
 
     print(f"Loading model: {model}")
-    lm, tokenizer, config = load_lm(model)
+    lm, tokenizer, config = load_lm(model, attn_implementation=attn_implementation)
     lm.eval()
     tokenizer = lm.tokenizer
 
