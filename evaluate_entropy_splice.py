@@ -550,6 +550,26 @@ def _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, mode):
 _NUMERIC_RE = re.compile(r"\d")
 
 
+def _reached_low_entropy_no_numbers(tokens, entropies, start_pos, end_pos, tokenizer, retention_rate):
+    """Same ranking as _reached_from_entropy(mode='low'), but the candidate
+    pool excludes any position whose decoded token contains a digit
+    (same _NUMERIC_RE.search check used by _reached_numbers_only) BEFORE
+    ranking by entropy. Isolates low-entropy, non-numeric content.
+    Budget is computed against the FULL thinking region (not the filtered
+    pool), matching numbers/newlines/end_of_sentence convention -- pool can
+    be exhausted before reaching budget on number-heavy traces.
+    """
+    budget = _budget(start_pos, end_pos, retention_rate)
+    candidates = [
+        i for i in range(start_pos, end_pos)
+        if not _NUMERIC_RE.search(tokenizer.decode([tokens[i]]))
+    ]
+    indexed = [(entropies[i], i) for i in candidates]
+    indexed.sort(key=lambda x: x[0])
+    selected = indexed[:budget]
+    return sorted(i for _, i in selected)
+
+
 def _reached_numbers_only(tokens, start_pos, end_pos, tokenizer, retention_rate, seed=0, filter_out=None):
     budget = _budget(start_pos, end_pos, retention_rate)
     # ALIGNED with CompressionPatching._select_numbers (compression_patching.py):
@@ -659,7 +679,7 @@ def _sample_random_positions(lo: int, hi: int, n_sample: int, exclude: List[int]
     return sorted(rng.sample(candidates, n_sample))
 
 
-_VALID_SELECTORS = ("low_entropy", "high_entropy", "numbers", "newlines", "end_of_sentence", "random")
+_VALID_SELECTORS = ("low_entropy", "high_entropy", "numbers", "newlines", "end_of_sentence", "random", "low_entropy_no_numbers")
 
 
 def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_rate, tokenizer, seed, filter_out=None):
@@ -676,6 +696,8 @@ def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_
     elif selector == "random":
         budget = _budget(start_pos, end_pos, retention_rate)
         return _sample_random_positions(start_pos, end_pos, budget, exclude=[], seed=seed)
+    elif selector == "low_entropy_no_numbers":
+        return _reached_low_entropy_no_numbers(tokens, entropies, start_pos, end_pos, tokenizer, retention_rate)
     else:
         raise ValueError(f"Unknown selector: {selector!r}, expected one of {_VALID_SELECTORS}")
 
@@ -1080,7 +1102,7 @@ def main(
                         # table (see pool_exhausted_high_rate column) so it's
                         # visible without re-running with --debug.
                         if (
-                            sel in ("numbers", "newlines", "end_of_sentence")
+                            sel in ("numbers", "newlines", "end_of_sentence", "low_entropy_no_numbers")
                             and rate >= pool_exhaustion_warn_rate_threshold
                             and len(reached_positions) < budget_for_sel
                         ):

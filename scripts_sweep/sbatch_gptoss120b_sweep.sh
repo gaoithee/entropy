@@ -7,7 +7,8 @@
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=200G
-#SBATCH --time=20:00:00
+#SBATCH --time=60:00:00
+#SBATCH --qos=boost_qos_lprod
 #SBATCH --output=slurm_outputs/gptoss120b-sweep-%A_%a.out
 #SBATCH --export=ALL
 
