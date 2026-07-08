@@ -34,18 +34,20 @@ Reached-only: concatenate the tokens of the selected sentences, in their
 ORIGINAL order (never scrambled), exactly like the token-level invariant.
 
 Patched (two independent variants, both computed per run):
-  - pooled:     each selected sentence is represented, per layer, by the
-                MEAN of that sentence's token activations. Every position
-                the sentence occupies in the reconstructed short sequence is
-                patched with this SAME pooled vector.
-  - last_token: each selected sentence is represented, per layer, by the
-                activation AT ITS LAST TOKEN. Every position the sentence
-                occupies in the reconstructed short sequence is patched with
-                this SAME last-token vector.
-  In both cases all positions belonging to one sentence receive an
-  IDENTICAL vector (this is the point of the ablation: does a single
-  summary vector per sentence carry as much signal as the token-resolved
-  patching in the original script).
+  - pooled: each selected sentence is represented, per layer, by the
+            MEAN of that sentence's token activations. Every position the
+            sentence occupies in the reconstructed short sequence is patched
+            with this SAME pooled vector -- all positions belonging to one
+            sentence receive an IDENTICAL vector (this is the point of the
+            ablation: does a single summary vector per sentence carry as
+            much signal as the token-resolved patching in the original
+            script).
+  NOTE: a last-token variant (representing each sentence by the activation
+  at its final token) was deliberately NOT included -- a sentence's last
+  token is, by construction, at or right next to its sentence-ending period,
+  making it conceptually redundant with the token-level `end_of_sentence`
+  selector already covered elsewhere. Pooled is kept as the one genuinely
+  new sentence-level signal.
 """
 
 import gc
@@ -165,26 +167,43 @@ def _sentence_numeric_density(seg, tokens, tokenizer):
     return n_numeric / n
 
 
-def _greedy_fill_by_budget(ranked_segs: List[Tuple[int, int]], budget: int) -> List[Tuple[int, int]]:
+def _greedy_fill_by_budget(ranked_segs: List[Tuple[int, int]], budget: int) -> Tuple[List[Tuple[int, int]], bool]:
     """Add whole sentences in ranked (best-first) order until the next
     addition would exceed `budget` tokens. Mirrors the token-level
-    selectors' pool-exhaustion semantics: if the trace doesn't have enough
-    scorable sentences, fewer tokens than budget are returned rather than
-    erroring. Returns the selected spans, re-sorted back into ORIGINAL
-    document order (never scrambled) before the caller flattens them.
+    selectors' pool-exhaustion semantics, but the token-level warning
+    conflates two very different situations at sentence granularity, so
+    this now separates them explicitly via the returned bool:
+
+    - TRUE pool exhaustion (returned bool = True): every candidate sentence
+      in `ranked_segs` was consumed and the cumulative token count STILL
+      didn't reach `budget` -- there simply weren't enough scorable
+      sentences (e.g. numbers/low_entropy_no_numbers on a trace with very
+      few numeric/non-numeric-scorable sentences). This is the real
+      "not enough content to fill the budget" signal.
+    - Granularity undershoot (returned bool = False, even if used < budget):
+      candidates REMAIN in ranked_segs, but the next one would overflow
+      budget and sentences are never split -- so the fill stops slightly
+      short on purpose. This is expected/benign for EVERY selector
+      (including random/low_entropy/high_entropy, which never run out of
+      candidates) and should NOT be reported as pool exhaustion.
+
+    Returns (selected_spans_in_original_order, true_pool_exhausted).
     """
     selected = []
     used = 0
-    for seg in ranked_segs:
+    for idx, seg in enumerate(ranked_segs):
         seg_len = seg[1] - seg[0]
         if used + seg_len > budget and selected:
-            # already have at least one sentence and the next would overflow
-            break
+            # candidates remain (ranked_segs[idx:]) but next one would
+            # overflow -- granularity undershoot, NOT pool exhaustion.
+            return sorted(selected, key=lambda s: s[0]), False
         selected.append(seg)
         used += seg_len
         if used >= budget:
-            break
-    return sorted(selected, key=lambda s: s[0])
+            return sorted(selected, key=lambda s: s[0]), False
+    # Loop completed without ever breaking/returning above: every candidate
+    # was consumed and we still never reached budget -- true exhaustion.
+    return sorted(selected, key=lambda s: s[0]), True
 
 
 def _sentence_contains_gt_answer(seg, tokens, tokenizer, gt_answer: str) -> bool:
@@ -204,8 +223,14 @@ def select_sentences(
     tokenizer,
     seed: int,
     filter_out: Optional[str] = None,
-) -> List[Tuple[int, int]]:
-    """Returns the selected sentence spans, in ORIGINAL order.
+) -> Tuple[List[Tuple[int, int]], bool]:
+    """Returns (selected_spans_in_original_order, true_pool_exhausted).
+
+    true_pool_exhausted is True only when every scorable candidate sentence
+    was used and the budget was still not reached (see
+    _greedy_fill_by_budget docstring for the distinction from the benign
+    "can't split a sentence" undershoot, which returns False here even
+    though the token count may still be under budget).
 
     filter_out: if given (the ground-truth answer string), any sentence
         whose decoded text literally CONTAINS this string is dropped from
@@ -279,10 +304,8 @@ def _sentence_summary_vectors(full_resid: torch.Tensor, spans: List[Tuple[int, i
     for (s, e) in spans:
         if mode == "pooled":
             vec = full_resid[:, s:e, :].mean(dim=1)
-        elif mode == "last_token":
-            vec = full_resid[:, e - 1, :]
         else:
-            raise ValueError(f"Unknown sentence patch mode {mode!r}")
+            raise ValueError(f"Unknown sentence patch mode {mode!r} (only 'pooled' is supported)")
         vectors.append(vec)
     return vectors
 
@@ -301,8 +324,9 @@ def generate_with_sentence_patching(
 ) -> str:
     """Same skeleton as evaluate_entropy_splice.generate_with_patching, but
     every token position belonging to sentence k is patched with the SAME
-    per-sentence summary vector (pooled or last_token), instead of each
-    position getting its own original per-token activation.
+    per-sentence pooled summary vector, instead of each position getting its
+    own original per-token activation. `mode` is kept as a parameter (only
+    "pooled" is valid) for interface symmetry with _sentence_summary_vectors.
     """
     if layers_to_patch is None:
         layers_to_patch = list(range(num_layers))
@@ -419,7 +443,7 @@ def main(
     if layers_to_patch is not None:
         print(f"Patch layers: {len(layers_to_patch)}/{num_layers} -- {layers_to_patch}")
 
-    PATCH_MODES = ("pooled", "last_token")
+    PATCH_MODES = ("pooled",)
     print(f"Sweep: {len(selectors)} selector(s) x {len(rates)} retention_rate(s) "
           f"= {len(selectors) * len(rates)} combo(s). skip_patched={skip_patched} "
           f"patch_modes={PATCH_MODES if not skip_patched else '-'}")
@@ -429,9 +453,10 @@ def main(
     stats = {
         k: {
             "full_correct": 0, "reached_correct": 0, "random_correct": 0, "no_cot_correct": 0,
-            "pooled_correct": 0, "last_token_correct": 0,
-            "random_pooled_correct": 0, "random_last_token_correct": 0,
-            "total": 0, "pool_exhausted_high_rate": 0,
+            "pooled_correct": 0,
+            "random_pooled_correct": 0,
+            "total": 0, "pool_exhausted_true": 0,
+            "rounding_shortfall_sum": 0, "rounding_shortfall_n": 0,
         }
         for k in combo_keys
     }
@@ -526,7 +551,7 @@ def main(
                 random_cache = {}
                 for rate in rates:
                     budget = _budget(start_pos, end_pos, rate)
-                    random_spans = select_sentences(
+                    random_spans, _ = select_sentences(
                         "random", sentences, full_ids_list, full_entropy,
                         start_pos, end_pos, rate, tokenizer, seed=trace_seed_base,
                         filter_out=(gt_answer if filter_gt_answer else None),
@@ -549,34 +574,27 @@ def main(
                     random_correct = check_correct(suffix_text + random_gen_text, gt_answer)
 
                     random_pooled_correct = None
-                    random_last_token_correct = None
                     if not skip_patched:
-                        for mode, key_name in (("pooled", "random_pooled_correct"), ("last_token", "random_last_token_correct")):
-                            gen_text = generate_with_sentence_patching(
-                                lm, num_layers, random_ids, full_resid, random_spans,
-                                patch_offset=len(prompt_tokens) + patch_base_offset_extra,
-                                tokenizer=tokenizer, mode=mode,
-                                max_new_tokens=max_new_tokens, layers_to_patch=layers_to_patch,
-                            )
-                            correct = check_correct(suffix_text + gen_text, gt_answer)
-                            if mode == "pooled":
-                                random_pooled_correct = correct
-                            else:
-                                random_last_token_correct = correct
+                        gen_text = generate_with_sentence_patching(
+                            lm, num_layers, random_ids, full_resid, random_spans,
+                            patch_offset=len(prompt_tokens) + patch_base_offset_extra,
+                            tokenizer=tokenizer, mode="pooled",
+                            max_new_tokens=max_new_tokens, layers_to_patch=layers_to_patch,
+                        )
+                        random_pooled_correct = check_correct(suffix_text + gen_text, gt_answer)
 
                     random_cache[rate] = {
                         "spans": random_spans,
                         "gen_text": random_gen_text,
                         "correct": random_correct,
                         "pooled_correct": random_pooled_correct,
-                        "last_token_correct": random_last_token_correct,
                     }
 
                 for sel in selectors:
                     for rate in rates:
                         key = (sel, rate)
                         budget_for_sel = _budget(start_pos, end_pos, rate)
-                        selected_spans = select_sentences(
+                        selected_spans, true_exhausted = select_sentences(
                             sel, sentences, full_ids_list, full_entropy,
                             start_pos, end_pos, rate, tokenizer, seed=trace_seed_base,
                             filter_out=(gt_answer if filter_gt_answer else None),
@@ -584,22 +602,38 @@ def main(
                         reached_positions = _flatten(selected_spans)
 
                         n_selected_tokens = len(reached_positions)
-                        if n_selected_tokens < budget_for_sel:
-                            stats[key]["pool_exhausted_high_rate"] += 1
+                        shortfall = budget_for_sel - n_selected_tokens
+                        if true_exhausted:
+                            # Real exhaustion: every scorable candidate sentence
+                            # was used and we STILL didn't reach budget -- this
+                            # selector genuinely doesn't have enough content on
+                            # this trace (e.g. numbers/low_entropy_no_numbers
+                            # with very few qualifying sentences).
+                            stats[key]["pool_exhausted_true"] += 1
                             if rate >= pool_exhaustion_warn_rate_threshold:
                                 print(
                                     f"  Q{q_idx} T{t_idx}: [WARNING] selector={sel} rate={rate:.2f}: "
-                                    f"pool exhausted -- only {n_selected_tokens}/{budget_for_sel} "
-                                    f"tokens available across {len(selected_spans)} sentence(s). "
-                                    f"Use n_tokens_reached/n_tokens_thinking, not retention_rate, "
-                                    f"for actual compression on this trace."
+                                    f"TRUE pool exhaustion -- only {n_selected_tokens}/{budget_for_sel} "
+                                    f"tokens available across {len(selected_spans)} sentence(s), and "
+                                    f"every scorable candidate sentence was already used. This selector "
+                                    f"genuinely lacks enough qualifying content on this trace."
                                 )
+                        elif shortfall > 0:
+                            # Benign: candidates remained, but the next
+                            # sentence would have overflowed budget and we
+                            # never split sentences -- just a granularity
+                            # rounding effect, present for EVERY selector
+                            # (including random/low_entropy/high_entropy,
+                            # which never truly run out of candidates).
+                            stats[key]["rounding_shortfall_sum"] += shortfall
+                            stats[key]["rounding_shortfall_n"] += 1
 
                         if not reached_positions:
                             if debug:
                                 print(f"    [DEBUG] selector={sel} rate={rate:.2f}: 0 sentences matched -- "
                                       f"SKIPPING this trace for this combo")
                             continue
+
 
                         assert reached_positions == sorted(reached_positions), (
                             f"selector={sel} returned out-of-order positions -- "
@@ -620,20 +654,14 @@ def main(
                         reached_correct = check_correct(suffix_text + reached_gen_text, gt_answer)
 
                         pooled_correct = None
-                        last_token_correct = None
                         if not skip_patched:
-                            for mode, var in (("pooled", "pooled_correct"), ("last_token", "last_token_correct")):
-                                gen_text = generate_with_sentence_patching(
-                                    lm, num_layers, short_ids, full_resid, selected_spans,
-                                    patch_offset=len(prompt_tokens) + patch_base_offset_extra,
-                                    tokenizer=tokenizer, mode=mode,
-                                    max_new_tokens=max_new_tokens, layers_to_patch=layers_to_patch,
-                                )
-                                correct = check_correct(suffix_text + gen_text, gt_answer)
-                                if mode == "pooled":
-                                    pooled_correct = correct
-                                else:
-                                    last_token_correct = correct
+                            gen_text = generate_with_sentence_patching(
+                                lm, num_layers, short_ids, full_resid, selected_spans,
+                                patch_offset=len(prompt_tokens) + patch_base_offset_extra,
+                                tokenizer=tokenizer, mode="pooled",
+                                max_new_tokens=max_new_tokens, layers_to_patch=layers_to_patch,
+                            )
+                            pooled_correct = check_correct(suffix_text + gen_text, gt_answer)
 
                         rc = random_cache.get(rate)
                         trace_result = {
@@ -654,9 +682,7 @@ def main(
                         }
                         if not skip_patched:
                             trace_result["reached_pooled"] = {"correct": pooled_correct}
-                            trace_result["reached_last_token"] = {"correct": last_token_correct}
                             trace_result["random_pooled"] = {"correct": rc["pooled_correct"] if rc else None}
-                            trace_result["random_last_token"] = {"correct": rc["last_token_correct"] if rc else None}
 
                         s = stats[key]
                         s["total"] += 1
@@ -671,12 +697,8 @@ def main(
                         if not skip_patched:
                             if pooled_correct:
                                 s["pooled_correct"] += 1
-                            if last_token_correct:
-                                s["last_token_correct"] += 1
                             if rc and rc["pooled_correct"]:
                                 s["random_pooled_correct"] += 1
-                            if rc and rc["last_token_correct"]:
-                                s["random_last_token_correct"] += 1
 
                         results_questions[key].append({
                             "question_id": q_idx,
@@ -688,7 +710,6 @@ def main(
                             f"  Q{q_idx} T{t_idx} sel={sel:24s} rate={rate:.2f}  "
                             f"full={_fmt_bool(full_correct)}  reached={_fmt_bool(reached_correct)}  "
                             f"pooled={_fmt_bool(pooled_correct) if pooled_correct is not None else '  -  '}  "
-                            f"last_tok={_fmt_bool(last_token_correct) if last_token_correct is not None else '  -  '}  "
                             f"no_cot={_fmt_bool(no_cot_correct)}"
                         )
 
@@ -711,7 +732,8 @@ def main(
     print()
     header = (
         f"{'selector':24s} {'rate':>6s} {'total':>6s} {'full':>7s} {'reached':>8s} "
-        f"{'pooled':>8s} {'last_tok':>9s} {'random':>7s} {'no_cot':>7s} {'pool_exh':>9s}"
+        f"{'pooled':>8s} {'random':>7s} {'no_cot':>7s} "
+        f"{'pool_exh':>9s} {'avg_round':>10s}"
     )
     print(header)
     print("-" * len(header))
@@ -721,14 +743,26 @@ def main(
         total = s["total"]
 
         def _pct(k):
-            return f"{s[k]}/{total}" if total else "  n/a"
+            if not skip_patched:
+                return f"{s[k]}/{total}" if total else "  n/a"
+            return "  n/a"  # pooled never computed when skip_patched
+
+        avg_round = (
+            s["rounding_shortfall_sum"] / s["rounding_shortfall_n"]
+            if s["rounding_shortfall_n"] else 0.0
+        )
+
+        full_str = f"{s['full_correct']}/{total}" if total else "  n/a"
+        reached_str = f"{s['reached_correct']}/{total}" if total else "  n/a"
+        random_str = f"{s['random_correct']}/{total}" if total else "  n/a"
+        no_cot_str = f"{s['no_cot_correct']}/{total}" if total else "  n/a"
 
         print(
             f"{sel:24s} {rate:>6.2f} {total:>6d} "
-            f"{_pct('full_correct'):>7s} {_pct('reached_correct'):>8s} "
-            f"{_pct('pooled_correct'):>8s} {_pct('last_token_correct'):>9s} "
-            f"{_pct('random_correct'):>7s} {_pct('no_cot_correct'):>7s} "
-            f"{s['pool_exhausted_high_rate']:>9d}"
+            f"{full_str:>7s} {reached_str:>8s} "
+            f"{_pct('pooled_correct'):>8s} "
+            f"{random_str:>7s} {no_cot_str:>7s} "
+            f"{s['pool_exhausted_true']:>9d} {avg_round:>10.1f}"
         )
 
         summary = {
@@ -737,13 +771,12 @@ def main(
             "reached_only_accuracy": s["reached_correct"] / total if total else 0,
             "random_only_accuracy": s["random_correct"] / total if total else 0,
             "no_cot_accuracy": s["no_cot_correct"] / total if total else 0,
-            "pool_exhausted_count": s["pool_exhausted_high_rate"],
+            "pool_exhausted_true_count": s["pool_exhausted_true"],
+            "avg_rounding_shortfall_tokens": avg_round,
         }
         if not skip_patched:
             summary["reached_pooled_accuracy"] = s["pooled_correct"] / total if total else 0
-            summary["reached_last_token_accuracy"] = s["last_token_correct"] / total if total else 0
             summary["random_pooled_accuracy"] = s["random_pooled_correct"] / total if total else 0
-            summary["random_last_token_accuracy"] = s["random_last_token_correct"] / total if total else 0
 
         suffix = "_nopatch" if skip_patched else ""
         if not skip_patched and patch_layers is not None:

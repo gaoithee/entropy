@@ -1,0 +1,19 @@
+Skipping import of cpp extensions due to incompatible torch version 2.9.0+cu128 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+Loading model: Qwen/Qwen3-4B
+[attn] auto-selected attn_implementation='sdpa' for Qwen/Qwen3-4B
+Loading via shared load_model_and_tokenizer (nnsight.LanguageModel)
+Suffix variant: 'therefore_boxed' -> '\n\nTherefore, the answer is \\boxed{' (9 tokens)
+Model: 36 layers
+Sweep: 1 selector(s) x 1 retention_rate(s) = 1 combo(s). skip_patched=True patch_modes=-
+  Q0 T0: 3859 thinking tokens, 164 sentences, starting generations... (0/1 good traces so far for this question)
+Loading weights:   0%|          | 0/398 [00:00<?, ?it/s]Loading weights:   4%|▍         | 16/398 [00:00<00:02, 159.03it/s]Loading weights:  15%|█▌        | 60/398 [00:00<00:01, 322.91it/s]Loading weights:  26%|██▌       | 104/398 [00:00<00:00, 375.63it/s]Loading weights:  37%|███▋      | 148/398 [00:00<00:00, 398.82it/s]Loading weights:  48%|████▊     | 192/398 [00:00<00:00, 412.89it/s]Loading weights:  60%|██████    | 240/398 [00:00<00:00, 433.15it/s]Loading weights:  72%|███████▏  | 286/398 [00:00<00:00, 440.88it/s]Loading weights:  84%|████████▎ | 333/398 [00:00<00:00, 444.20it/s]Loading weights:  95%|█████████▍| 378/398 [00:00<00:00, 439.67it/s]Loading weights: 100%|██████████| 398/398 [00:00<00:00, 418.22it/s]
+  Q0 T0 sel=low_entropy              rate=0.30  full= True  reached= True  pooled=  -    no_cot=False
+  ...processed 1/1 questions
+
+selector                   rate  total    full  reached   pooled  random  no_cot  pool_exh  avg_round
+-----------------------------------------------------------------------------------------------------
+low_entropy                0.30      1     1/1      1/1      n/a     1/1     0/1         0        8.0
+
+truncated_skipped: 0
+
+Wrote 1 result file(s) alongside /share/ai-lab/scandussio/entropy/data/aime_2024/Qwen3-4B_teacher_traces.json

@@ -1,0 +1,52 @@
+Skipping import of cpp extensions due to incompatible torch version 2.9.0+cu128 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+Loading model: openai/gpt-oss-20b
+[attn] auto-selected attn_implementation='eager' for openai/gpt-oss-20b
+Loading via shared load_model_and_tokenizer (nnsight.LanguageModel)
+Suffix variant: 'therefore_boxed' -> '\n\nTherefore, the answer is \\boxed{' (9 tokens)
+Model: 24 layers
+Sweep: 5 selector(s) x 2 retention_rate(s) = 10 combo(s). skip_patched=True patch_modes=-
+    [DEBUG] segmented 53 sentence(s) in thinking region [200, 1217)
+  Q0 T0: 1017 thinking tokens, 53 sentences, starting generations... (0/1 good traces so far for this question)
+Fetching 42 files:   0%|          | 0/42 [00:00<?, ?it/s]Fetching 42 files: 100%|██████████| 42/42 [00:00<00:00, 2729.95it/s]
+Loading weights:   0%|          | 0/411 [00:00<?, ?it/s]Loading weights:   0%|          | 2/411 [00:00<00:46,  8.80it/s]Loading weights:   6%|▌         | 23/411 [00:00<00:04, 80.68it/s]Loading weights:  14%|█▍        | 58/411 [00:00<00:02, 159.01it/s]Loading weights:  22%|██▏       | 92/411 [00:00<00:01, 199.04it/s]Loading weights:  30%|██▉       | 123/411 [00:00<00:01, 214.95it/s]Loading weights:  38%|███▊      | 158/411 [00:00<00:01, 239.17it/s]Loading weights:  47%|████▋     | 194/411 [00:00<00:00, 256.62it/s]Loading weights:  55%|█████▌    | 228/411 [00:01<00:00, 262.06it/s]Loading weights:  64%|██████▎   | 261/411 [00:01<00:00, 265.63it/s]Loading weights:  72%|███████▏  | 296/411 [00:01<00:00, 269.49it/s]Loading weights:  80%|████████  | 330/411 [00:01<00:00, 266.46it/s]Loading weights:  89%|████████▊ | 364/411 [00:01<00:00, 270.42it/s]Loading weights:  96%|█████████▋| 396/411 [00:01<00:00, 268.14it/s]Loading weights: 100%|██████████| 411/411 [00:01<00:00, 239.29it/s]
+  Q0 T0 sel=low_entropy              rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=low_entropy              rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=high_entropy             rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=high_entropy             rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=numbers                  rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=numbers                  rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=low_entropy_no_numbers   rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=low_entropy_no_numbers   rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=random                   rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q0 T0 sel=random                   rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 Trace 0: no end_thinking boundary (truncated at 16384 tokens), skipping (does not count toward budget)
+    [DEBUG] segmented 390 sentence(s) in thinking region [175, 9148)
+  Q1 T1: 8973 thinking tokens, 390 sentences, starting generations... (0/1 good traces so far for this question)
+  Q1 T1 sel=low_entropy              rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=low_entropy              rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=high_entropy             rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=high_entropy             rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=numbers                  rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=numbers                  rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=low_entropy_no_numbers   rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=low_entropy_no_numbers   rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=random                   rate=0.50  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  Q1 T1 sel=random                   rate=1.00  full= True  reached= True  pooled=  -    last_tok=  -    no_cot=False
+  ...processed 2/2 questions
+
+selector                   rate  total    full  reached   pooled  last_tok  random  no_cot  pool_exh  avg_round
+---------------------------------------------------------------------------------------------------------------
+low_entropy                0.50      2     2/2      2/2      n/a       n/a     2/2     0/2         0       14.5
+low_entropy                1.00      2     2/2      2/2      n/a       n/a     2/2     0/2         0        0.0
+high_entropy               0.50      2     2/2      2/2      n/a       n/a     2/2     0/2         0        4.0
+high_entropy               1.00      2     2/2      2/2      n/a       n/a     2/2     0/2         0        0.0
+numbers                    0.50      2     2/2      2/2      n/a       n/a     2/2     0/2         0        4.0
+numbers                    1.00      2     2/2      2/2      n/a       n/a     2/2     0/2         0        0.0
+low_entropy_no_numbers     0.50      2     2/2      2/2      n/a       n/a     2/2     0/2         0        5.5
+low_entropy_no_numbers     1.00      2     2/2      2/2      n/a       n/a     2/2     0/2         0        0.0
+random                     0.50      2     2/2      2/2      n/a       n/a     2/2     0/2         0       14.5
+random                     1.00      2     2/2      2/2      n/a       n/a     2/2     0/2         0        0.0
+
+truncated_skipped: 1
+
+Wrote 10 result file(s) alongside /share/ai-lab/scandussio/entropy/data/aime_2024/gpt-oss-20b_teacher_traces.json
