@@ -1,19 +1,0 @@
-Skipping import of cpp extensions due to incompatible torch version 2.9.0+cu128 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
-Loading model: google/gemma-4-E4B-it
-[attn] auto-selected attn_implementation='sdpa' for google/gemma-4-E4B-it
-Loading via VisionLanguageModel (gemma-4 workaround)
-Suffix variant: 'therefore_boxed' -> '\n\nTherefore, the answer is \\boxed{' (9 tokens)
-Model: 42 layers
-Sweep: 1 selector(s) x 1 retention_rate(s) = 1 combo(s). skip_patched=True patch_modes=-
-  Q0 T0: 2380 thinking tokens, 107 sentences, starting generations... (0/1 good traces so far for this question)
-Loading weights:   0%|          | 0/2076 [00:00<?, ?it/s]Loading weights:  27%|██▋       | 565/2076 [00:00<00:00, 5644.85it/s]Loading weights:  54%|█████▍    | 1130/2076 [00:01<00:01, 491.38it/s]Loading weights:  67%|██████▋   | 1381/2076 [00:02<00:01, 515.76it/s]Loading weights:  82%|████████▏ | 1693/2076 [00:02<00:00, 708.14it/s]Loading weights: 100%|██████████| 2076/2076 [00:02<00:00, 806.77it/s]
-  Q0 T0 sel=low_entropy              rate=0.30  full= True  reached= True  pooled=  -    no_cot=False
-  ...processed 1/1 questions
-
-selector                   rate  total    full  reached   pooled  random  no_cot  pool_exh  avg_round
------------------------------------------------------------------------------------------------------
-low_entropy                0.30      1     1/1      1/1      n/a     1/1     0/1         0        0.0
-
-truncated_skipped: 0
-
-Wrote 1 result file(s) alongside /share/ai-lab/scandussio/entropy/data/aime_2024/gemma-4-E4B-it_teacher_traces.json

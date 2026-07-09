@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=uTS26_Bortolus
 #SBATCH --partition=boost_usr_prod
-#SBATCH --job-name="gptoss120b-sweep"
+#SBATCH --job-name="gptoss120b-sentence-sweep"
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
@@ -9,17 +9,19 @@
 #SBATCH --mem=200G
 #SBATCH --time=60:00:00
 #SBATCH --qos=boost_qos_lprod
-#SBATCH --output=slurm_outputs/gptoss120b-sweep-%A_%a.out
+#SBATCH --output=slurm_outputs/gptoss120b-sentence-sweep-%A_%a.out
 #SBATCH --export=ALL
 
 # ===========================================================================
-# Full retention/selector sweep for gpt-oss-20b, one whole dataset per array
-# task (no question chunking). --array=0-5.
-# Per-task estimated duration (~18.4 min/question, measured empirically):
-#   aime_2024   (30 q) ~9.2h    aime2025    (30 q) ~9.2h
-#   aime_2026   (30 q) ~9.2h    math-500   (100 q) ~30.7h  <- longest
-#   zebralogic  (50 q) ~15.3h   gpqa        (50 q) ~15.3h
-# --time is set to the worst case (math-500) plus margin.
+# Full retention/selector sweep for openai/gpt-oss-120b, SENTENCE-LEVEL
+# (evaluate_entropy_sentence.py, --skip_patched True), one (dataset,
+# selector) combo per array task. --array=0-29 (6 datasets x 5 selectors).
+#
+# NOTE: gres/mem/time copied as-is from sbatch_gptoss120b_sweep.sh (the
+# token-level/splice version), since that's the only empirical reference
+# point for this model's resource footprint. skip_patched=True here should
+# make actual runtime lower than that reference -- retune --time down after
+# the first task(s) complete if you want to reclaim queue priority.
 # ===========================================================================
 
 PROJECT_DIR="$HOME/entropy"
@@ -32,22 +34,8 @@ export TRITON_CACHE_DIR="$WORK/triton_cache/${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_
 mkdir -p "$TRITON_CACHE_DIR"
 
 RATES="0.01,0.05,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1.0"
-SELECTORS="low_entropy,high_entropy,numbers,newlines,end_of_sentence,random"
 MAX_TRACES=8
 
-# ---------------------------------------------------------------------------
-# JOBS: (traces_file, max_questions)  -- max_questions=0 means "all"
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# JOBS: (traces_file, selector) -- one selector per task, full retention_rate
-# sweep still handled internally (model loaded once, all 12 rates run in the
-# same process). Splitting per (dataset, selector) instead of per question
-# chunk means: (a) every task stays well under the 24h cap without needing to
-# split math-500, and (b) a failed/timed-out task only loses ONE selector's
-# results for ONE dataset, not an arbitrary chunk of questions -- there is no
-# resume/checkpoint in evaluate_entropy_splice.py, so granularity here is the
-# only blast-radius control we have.
-# ---------------------------------------------------------------------------
 DATASETS=(
     "data/aime_2024/gpt-oss-120b_teacher_traces.json"
     "data/aime2025/gpt-oss-120b_teacher_traces.json"
@@ -59,7 +47,7 @@ DATASETS=(
 # max_questions per dataset, aligned by index with DATASETS above (0 = all)
 MAX_Q=(0 0 0 100 50 50)
 
-ALL_SELECTORS=("low_entropy" "high_entropy" "numbers" "newlines" "end_of_sentence" "random")
+ALL_SELECTORS=("low_entropy" "high_entropy" "numbers" "low_entropy_no_numbers" "random")
 
 N_DATASETS=${#DATASETS[@]}
 N_SELECTORS=${#ALL_SELECTORS[@]}
@@ -79,13 +67,14 @@ else
     MAX_Q_ARG="--max_questions $Q_COUNT"
 fi
 
-python -u evaluate_entropy_splice.py \
+python -u evaluate_entropy_sentence.py \
     --model openai/gpt-oss-120b \
     --traces_file "$TRACES_FILE" \
     --retention_rate "$RATES" \
     --selector "$SEL" \
     --suffix_variant therefore_boxed \
     --max_traces $MAX_TRACES \
+    --skip_patched True \
     $MAX_Q_ARG
 
 echo "Task $SLURM_ARRAY_TASK_ID done."
