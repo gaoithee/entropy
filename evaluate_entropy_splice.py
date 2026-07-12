@@ -955,6 +955,7 @@ def main(
                       f"{tokenizer.decode(wide_tail)!r}")
 
             trace_seed_base = seed + q_idx * 1000 + t_idx
+            reached_gen_cache = {}  # reset per trace (was placed too early otherwise -- see Edit 1)
             print(f"  Q{q_idx} T{t_idx}: {end_pos - start_pos} thinking tokens, starting generations... "
                   f"({n_good_traces_this_question}/{max_traces if max_traces is not None else '?'} "
                   f"good traces so far for this question)")
@@ -1067,6 +1068,7 @@ def main(
                         "patched_correct": random_patched_correct,
                     }
 
+                reached_gen_cache = {}  # sel -> (cache_key, reached_gen_text, reached_correct, patched_correct)
                 for sel in selectors:
                     for rate in rates:
                         key = (sel, rate)
@@ -1189,44 +1191,48 @@ def main(
                                       f"in the summary, unlike low_entropy/random which always match)")
                             continue
 
-                        short_ids = torch.tensor(
-                            [_build_sequence(
-                                prompt_tokens, start_ids,
-                                [full_ids_list[p] for p in reached_positions],
-                                end_ids, tail_ids, suffix_ids,
-                            )],
-                            device=device,
-                        )
-                        gen_ids = greedy_generate(lm, short_ids, max_new_tokens=max_new_tokens,
-                                                   eos_token_id=tokenizer.eos_token_id)
-                        reached_gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-                        reached_correct = check_correct(suffix_text + reached_gen_text, gt_answer)
-
-                        if debug:
-                            print(f"    [DEBUG] selector={sel} rate={rate:.2f}: reached_only "
-                                  f"generated_answer = {reached_gen_text!r}, correct={reached_correct}")
-
-                        patched_correct = None
-                        if not skip_patched:
-                            gen_text = generate_with_patching(
-                                lm, num_layers, short_ids, full_resid, reached_positions,
-                                patch_offset=len(prompt_tokens) + patch_base_offset_extra,
-                                tokenizer=tokenizer,
-                                max_new_tokens=max_new_tokens,
-                                layers_to_patch=layers_to_patch,
+                        cache_key = tuple(reached_positions)
+                        cached = reached_gen_cache.get(sel)
+                        if cached is not None and cached[0] == cache_key:
+                            reached_gen_text, reached_correct, patched_correct = cached[1], cached[2], cached[3]
+                            if debug:
+                                print(f"    [DEBUG] selector={sel} rate={rate:.2f}: reached_positions "
+                                      f"identical to previous rate (pool exhausted) -- reusing cached "
+                                      f"generation instead of recomputing")
+                        else:
+                            short_ids = torch.tensor(
+                                [_build_sequence(
+                                    prompt_tokens, start_ids,
+                                    [full_ids_list[p] for p in reached_positions],
+                                    end_ids, tail_ids, suffix_ids,
+                                )],
+                                device=device,
                             )
-                            patched_correct = check_correct(suffix_text + gen_text, gt_answer)
+                            gen_ids = greedy_generate(lm, short_ids, max_new_tokens=max_new_tokens,
+                                                       eos_token_id=tokenizer.eos_token_id)
+                            reached_gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+                            reached_correct = check_correct(suffix_text + reached_gen_text, gt_answer)
 
                             if debug:
-                                # This was NEVER printed before -- patched_correct was
-                                # computed and saved to the output JSON, but with
-                                # --skip_patched False you had no way to see the
-                                # patched result during the run itself, only
-                                # reached_only (surface, unpatched). This is exactly
-                                # the number needed to answer "does patching save
-                                # numbers/end_of_sentence at high compression".
-                                print(f"    [DEBUG] selector={sel} rate={rate:.2f}: reached_PATCHED "
-                                      f"generated_answer = {gen_text!r}, correct={patched_correct}")
+                                print(f"    [DEBUG] selector={sel} rate={rate:.2f}: reached_only "
+                                      f"generated_answer = {reached_gen_text!r}, correct={reached_correct}")
+
+                            patched_correct = None
+                            if not skip_patched:
+                                gen_text = generate_with_patching(
+                                    lm, num_layers, short_ids, full_resid, reached_positions,
+                                    patch_offset=len(prompt_tokens) + patch_base_offset_extra,
+                                    tokenizer=tokenizer,
+                                    max_new_tokens=max_new_tokens,
+                                    layers_to_patch=layers_to_patch,
+                                )
+                                patched_correct = check_correct(suffix_text + gen_text, gt_answer)
+
+                                if debug:
+                                    print(f"    [DEBUG] selector={sel} rate={rate:.2f}: reached_PATCHED "
+                                          f"generated_answer = {gen_text!r}, correct={patched_correct}")
+
+                            reached_gen_cache[sel] = (cache_key, reached_gen_text, reached_correct, patched_correct)
 
                         rc = random_cache[rate]
                         trace_result = {

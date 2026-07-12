@@ -4,24 +4,24 @@
 #SBATCH --job-name="gptoss120b-sentence-sweep"
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=32
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=200G
 #SBATCH --time=60:00:00
 #SBATCH --qos=boost_qos_lprod
+#SBATCH --array=14-29
 #SBATCH --output=slurm_outputs/gptoss120b-sentence-sweep-%A_%a.out
 #SBATCH --export=ALL
 
 # ===========================================================================
 # Full retention/selector sweep for openai/gpt-oss-120b, SENTENCE-LEVEL
 # (evaluate_entropy_sentence.py, --skip_patched True), one (dataset,
-# selector) combo per array task. --array=0-29 (6 datasets x 5 selectors).
+# selector) combo per array task. --array=14-29 (tasks 0-13 already done,
+# resuming from the 14th onward; 6 datasets x 5 selectors total = 0-29).
 #
-# NOTE: gres/mem/time copied as-is from sbatch_gptoss120b_sweep.sh (the
-# token-level/splice version), since that's the only empirical reference
-# point for this model's resource footprint. skip_patched=True here should
-# make actual runtime lower than that reference -- retune --time down after
-# the first task(s) complete if you want to reclaim queue priority.
+# gres/cpus lowered from the original 4 GPU / 32 CPU: gpt-oss-120b only
+# needs 2 GPU per current sizing, and cpus-per-task=4 to cut CPU-hour
+# burn rate (project monthly budget was getting throttled at 32 CPU/task).
 # ===========================================================================
 
 PROJECT_DIR="$HOME/entropy"
