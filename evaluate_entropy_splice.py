@@ -550,20 +550,22 @@ def _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, mode):
 _NUMERIC_RE = re.compile(r"\d")
 
 
-def _reached_low_entropy_no_numbers(tokens, entropies, start_pos, end_pos, tokenizer, retention_rate):
+def _reached_low_entropy_no_numbers(entropies, start_pos, end_pos, retention_rate, candidates):
     """Same ranking as _reached_from_entropy(mode='low'), but the candidate
-    pool excludes any position whose decoded token contains a digit
-    (same _NUMERIC_RE.search check used by _reached_numbers_only) BEFORE
-    ranking by entropy. Isolates low-entropy, non-numeric content.
+    pool excludes any position whose decoded token contains a digit.
+    `candidates` is precomputed ONCE PER TRACE by the caller (not re-derived
+    here per retention_rate) -- the non-numeric candidate set doesn't depend
+    on rate, only the budget does, so redoing the tokenizer.decode() filter
+    on every rate was pure wasted compute (12x redundant work per trace with
+    the default rate sweep). This was the main driver behind
+    low_entropy_no_numbers taking dramatically longer than every other
+    selector on the same traces, especially visible on slower models
+    (gemma-4-26B-A4B-it).
     Budget is computed against the FULL thinking region (not the filtered
     pool), matching numbers/newlines/end_of_sentence convention -- pool can
     be exhausted before reaching budget on number-heavy traces.
     """
     budget = _budget(start_pos, end_pos, retention_rate)
-    candidates = [
-        i for i in range(start_pos, end_pos)
-        if not _NUMERIC_RE.search(tokenizer.decode([tokens[i]]))
-    ]
     indexed = [(entropies[i], i) for i in candidates]
     indexed.sort(key=lambda x: x[0])
     selected = indexed[:budget]
@@ -682,7 +684,7 @@ def _sample_random_positions(lo: int, hi: int, n_sample: int, exclude: List[int]
 _VALID_SELECTORS = ("low_entropy", "high_entropy", "numbers", "newlines", "end_of_sentence", "random", "low_entropy_no_numbers")
 
 
-def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_rate, tokenizer, seed, filter_out=None):
+def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_rate, tokenizer, seed, filter_out=None, no_numbers_candidates=None):
     if selector == "low_entropy":
         return _reached_from_entropy(entropies, start_pos, end_pos, retention_rate, "low")
     elif selector == "high_entropy":
@@ -697,7 +699,7 @@ def select_positions(selector, tokens, entropies, start_pos, end_pos, retention_
         budget = _budget(start_pos, end_pos, retention_rate)
         return _sample_random_positions(start_pos, end_pos, budget, exclude=[], seed=seed)
     elif selector == "low_entropy_no_numbers":
-        return _reached_low_entropy_no_numbers(tokens, entropies, start_pos, end_pos, tokenizer, retention_rate)
+        return _reached_low_entropy_no_numbers(entropies, start_pos, end_pos, retention_rate, no_numbers_candidates)
     else:
         raise ValueError(f"Unknown selector: {selector!r}, expected one of {_VALID_SELECTORS}")
 
@@ -915,6 +917,15 @@ def main(
             t_start, t_end = boundaries
             start_pos = len(prompt_tokens) + t_start
             end_pos = len(prompt_tokens) + t_end
+            # Precomputed ONCE PER TRACE (not once per retention_rate): the
+            # expensive part of low_entropy_no_numbers is decoding every
+            # token to check for a digit, and that candidate set doesn't
+            # change across rates within the same trace.
+            no_numbers_candidates = (
+                [i for i in range(start_pos, end_pos)
+                 if not _NUMERIC_RE.search(tokenizer.decode([full_ids_list[i]]))]
+                if "low_entropy_no_numbers" in selectors else None
+            )
 
             # NEW: real continuation from the trace, right after end_thinking.
             # This is the channel-switch marker (+ maybe a few leading answer
@@ -1077,6 +1088,7 @@ def main(
                             sel, full_ids_list, full_entropy, start_pos, end_pos,
                             rate, tokenizer, seed=trace_seed_base,
                             filter_out=(gt_answer if filter_gt_answer else None),
+                            no_numbers_candidates=no_numbers_candidates,
                         )
                         # INVARIANT: the compressed CoT must preserve the ORIGINAL
                         # token order, even though numbers/newlines/end_of_sentence/
