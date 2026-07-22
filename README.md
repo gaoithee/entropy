@@ -19,6 +19,7 @@ Optional extras:
 uv pip install -e ".[dev]"    # pytest
 uv pip install -e ".[quant]"  # bitsandbytes
 uv pip install -e ".[flash]"  # flash-attn
+uv pip install -e ".[plots]"  # plots.ipynb
 ```
 
 ## Data: reasoning traces

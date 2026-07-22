@@ -31,6 +31,12 @@ dependencies = [
 dev = ["pytest>=9.1"]
 quant = ["bitsandbytes"]
 flash = ["flash-attn"]
+plots = [
+    "ipykernel>=7.3",
+    "math-verify>=0.9",
+    "matplotlib>=3.10",
+    "pandas>=3.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
